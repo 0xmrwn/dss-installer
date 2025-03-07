@@ -142,13 +142,35 @@ check_locale() {
                 return 0
             else
                 echo -e "${YELLOW}[WARNING] Current locale ($current_locale) does not match required locale ($required_locale).${NC}"
-                echo -e "${YELLOW}Required locale is installed but not active. Consider updating with: sudo update-locale LANG=$required_locale${NC}"
+                
+                # Check OS type to suggest appropriate command
+                if [ -f /etc/os-release ] && grep -q -i "debian\|ubuntu" /etc/os-release; then
+                    # Debian/Ubuntu suggestion
+                    echo -e "${YELLOW}Required locale is installed but not active. Consider updating with: sudo update-locale LANG=$required_locale${NC}"
+                else
+                    # RHEL/CentOS/AlmaLinux/Rocky suggestion
+                    echo -e "${YELLOW}Required locale is installed but not active. Consider updating with either:${NC}"
+                    echo -e "${YELLOW}  - sudo localectl set-locale LANG=$required_locale${NC}"
+                    echo -e "${YELLOW}  - Or manually edit /etc/locale.conf and set LANG=$required_locale${NC}"
+                fi
+                
                 echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: Current locale ($current_locale) does not match required ($required_locale)." >> "$LOG_FILE"
                 return 0
             fi
         else
             echo -e "${RED}[FAIL] Required locale ($required_locale) is not installed.${NC}"
-            echo -e "${YELLOW}Install with: sudo locale-gen $required_locale${NC}"
+            
+            # Check OS type to suggest appropriate command
+            if [ -f /etc/os-release ] && grep -q -i "debian\|ubuntu" /etc/os-release; then
+                # Debian/Ubuntu suggestion
+                echo -e "${YELLOW}Install with: sudo locale-gen $required_locale${NC}"
+            else
+                # RHEL/CentOS/AlmaLinux/Rocky suggestion
+                echo -e "${YELLOW}Install with:${NC}"
+                echo -e "${YELLOW}  - sudo dnf install glibc-langpack-en   # For RHEL 8/AlmaLinux/Rocky${NC}"
+                echo -e "${YELLOW}  - sudo yum install glibc-langpack-en   # For older RHEL/CentOS${NC}"
+            fi
+            
             echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Required locale ($required_locale) is not installed." >> "$LOG_FILE"
             return 1
         fi
