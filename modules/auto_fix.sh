@@ -338,39 +338,29 @@ fix_java() {
     info "Attempting to install Java..."
     log_message "Attempting to install Java (required versions: $required_versions)"
     
-    # This ensures that newer versions (e.g., OpenJDK 17) are tried before older ones (e.g., OpenJDK 11)
-    # regardless of the order they are specified in the config file
+    # Create arrays to store versions
     local versions=()
     local version_numbers=()
     
     # Parse the versions into arrays
-    for version in $(echo "$required_versions" | tr ',' ' '); do
-        if [[ "$version" == *"OpenJDK 11"* ]]; then
-            versions+=("OpenJDK 11")
-            version_numbers+=("11")
-        elif [[ "$version" == *"OpenJDK 17"* ]]; then
-            versions+=("OpenJDK 17")
-            version_numbers+=("17")
-        # Add checks for other versions as needed
-        fi
-    done
+    if [[ "$required_versions" == *"OpenJDK 17"* ]]; then
+        versions+=("OpenJDK 17")
+        version_numbers+=("17")
+    fi
     
-    # Simple bubble sort to arrange versions in descending order
-    for ((i=0; i<${#version_numbers[@]}; i++)); do
-        for ((j=i+1; j<${#version_numbers[@]}; j++)); do
-            if [[ "${version_numbers[i]}" -lt "${version_numbers[j]}" ]]; then
-                # Swap version numbers
-                local temp_num="${version_numbers[i]}"
-                version_numbers[i]="${version_numbers[j]}"
-                version_numbers[j]="$temp_num"
-                
-                # Swap version names
-                local temp_ver="${versions[i]}"
-                versions[i]="${versions[j]}"
-                versions[j]="$temp_ver"
-            fi
-        done
-    done
+    if [[ "$required_versions" == *"OpenJDK 11"* ]]; then
+        versions+=("OpenJDK 11")
+        version_numbers+=("11")
+    fi
+    
+    # Add other version checks as needed
+    
+    # If no versions were parsed, use defaults
+    if [[ ${#versions[@]} -eq 0 ]]; then
+        warning "No specific Java versions detected in '$required_versions', using defaults: OpenJDK 17, OpenJDK 11"
+        versions=("OpenJDK 17" "OpenJDK 11")
+        version_numbers=("17" "11")
+    fi
     
     # Log the prioritized versions
     info "Prioritized Java versions: ${versions[*]}"
@@ -383,7 +373,7 @@ fix_java() {
     if command -v apt-get &>/dev/null; then
         info "Using apt package manager..."
         
-        # Try each version in order (latest first)
+        # Try each version in order
         for ((i=0; i<${#versions[@]}; i++)); do
             local version="${versions[i]}"
             local version_num="${version_numbers[i]}"
@@ -402,7 +392,7 @@ fix_java() {
     elif command -v dnf &>/dev/null; then
         info "Using dnf package manager..."
         
-        # Try each version in order (latest first)
+        # Try each version in order
         for ((i=0; i<${#versions[@]}; i++)); do
             local version="${versions[i]}"
             local version_num="${version_numbers[i]}"
@@ -421,7 +411,7 @@ fix_java() {
     elif command -v yum &>/dev/null; then
         info "Using yum package manager..."
         
-        # Try each version in order (latest first)
+        # Try each version in order
         for ((i=0; i<${#versions[@]}; i++)); do
             local version="${versions[i]}"
             local version_num="${version_numbers[i]}"

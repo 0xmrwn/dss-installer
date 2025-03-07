@@ -25,24 +25,34 @@ check_java() {
     
     # Check if java is installed and get version
     if command -v java &>/dev/null; then
-        java_version=$(java -version 2>&1 | head -n 1)
-        info "Detected Java: $java_version"
+        # Capture the full output for logging
+        local java_full_version
+        java_full_version=$(java -version 2>&1)
+        info "Detected Java: $(echo "$java_full_version" | head -n 1)"
         
-        # Check if Java version is in the allowed list
-        if [[ -n "$required_versions" ]]; then
-            if value_in_list "$java_version" "$required_versions"; then
-                pass "Java version check passed."
-                return 0
-            else
-                fail "Java version check failed."
-                suggest "Required Java versions: $required_versions"
-                # Set global variable for auto-fix to know Java is not of the right version
-                export MISSING_JAVA=true
-                return 1
-            fi
-        else
-            pass "Java is installed."
+        # Check if Java version matches any of the required versions
+        local is_acceptable=false
+        
+        # Look for OpenJDK 11
+        if [[ "$java_full_version" == *"openjdk"*"11."* ]] && [[ "$required_versions" == *"OpenJDK 11"* ]]; then
+            is_acceptable=true
+            info "Detected OpenJDK 11, which is an acceptable version"
+        # Look for OpenJDK 17
+        elif [[ "$java_full_version" == *"openjdk"*"17."* ]] && [[ "$required_versions" == *"OpenJDK 17"* ]]; then
+            is_acceptable=true
+            info "Detected OpenJDK 17, which is an acceptable version"
+        # Add other version checks as needed
+        fi
+        
+        if [[ "$is_acceptable" == true ]]; then
+            pass "Java version check passed."
             return 0
+        else
+            fail "Java version check failed."
+            suggest "Required Java versions: $required_versions"
+            # Set global variable for auto-fix to know Java is not of the right version
+            export MISSING_JAVA=true
+            return 1
         fi
     else
         fail "Java is not installed."
