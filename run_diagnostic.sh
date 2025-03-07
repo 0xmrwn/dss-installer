@@ -224,7 +224,7 @@ main() {
     local all_checks_passed=true
     
     # Setup progress tracking
-    local total_checks=5  # OS, hardware, limits, network, software
+    local total_checks=6  # OS, hardware, filesystem, limits, network, software
     local current_check=0
     
     # Read OS check parameters from config file
@@ -370,6 +370,30 @@ main() {
     else
         fail "Hardware check module not found at ${SCRIPT_DIR}/modules/check_hardware.sh"
         log_message "Error: Hardware check module not found"
+        all_checks_passed=false
+    fi
+    
+    # Run filesystem checks
+    current_check=$((current_check + 1))
+    show_progress "$current_check" "$total_checks" "Filesystem Checks"
+    
+    if [[ -f "${SCRIPT_DIR}/modules/check_filesystem.sh" ]]; then
+        log_message "Running filesystem checks"
+        
+        # Source the module to access its functions
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/modules/check_filesystem.sh"
+        
+        # Run filesystem checks with parameters from config
+        # Root mount is always "/", data mount comes from config
+        if ! run_filesystem_checks "/" "$data_disk_mount" "$filesystem"; then
+            # Filesystem checks usually require manual intervention, so we don't attempt auto-fixes
+            info "Filesystem checks failed. Manual intervention required."
+            all_checks_passed=false
+        fi
+    else
+        fail "Filesystem check module not found at ${SCRIPT_DIR}/modules/check_filesystem.sh"
+        log_message "Error: Filesystem check module not found"
         all_checks_passed=false
     fi
     
