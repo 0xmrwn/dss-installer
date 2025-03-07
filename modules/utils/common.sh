@@ -55,14 +55,14 @@ log_message() {
 # Function to display an info message
 info() {
     local message="$1"
-    echo -e "${CYAN}ℹ️  ${BRIGHT_WHITE}$message${NC}"
+    echo -e "${CYAN}[>] ${BRIGHT_WHITE}$message${NC}"
     log_message "INFO: $message"
 }
 
 # Function to display a pass message
 pass() {
     local message="$1"
-    echo -e "${GREEN}✓ ${BRIGHT_GREEN}$message${NC}"
+    echo -e "${GREEN}[✔] ${BRIGHT_GREEN}$message${NC}"
     log_message "PASS: $message"
 }
 
@@ -70,7 +70,7 @@ pass() {
 fail() {
     local message="$1"
     local details="${2:-}"
-    echo -e "${RED}✗ ${BRIGHT_RED}$message${NC}"
+    echo -e "${RED}[x] ${BRIGHT_RED}$message${NC}"
     if [[ -n "$details" ]]; then
         echo -e "${GRAY}  └─ ${RED}$details${NC}"
     fi
@@ -80,7 +80,7 @@ fail() {
 # Function to display a warning message
 warning() {
     local message="$1"
-    echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}$message${NC}"
+    echo -e "${YELLOW}[!]  ${BRIGHT_YELLOW}$message${NC}"
     log_message "WARNING: $message"
 }
 
@@ -121,9 +121,9 @@ section_footer() {
     
     echo ""
     if [[ $result -eq 0 ]]; then
-        echo -e "${GREEN}✓ ${BRIGHT_GREEN}${BOLD}$section_name completed successfully.${NC}"
+        echo -e "${GREEN}[✔] ${BRIGHT_GREEN}${BOLD}$section_name completed successfully.${NC}"
     else
-        echo -e "${RED}✗ ${BRIGHT_RED}${BOLD}$section_name failed. Please address the issues above.${NC}"
+        echo -e "${RED}[x] ${BRIGHT_RED}${BOLD}$section_name failed. Please address the issues above.${NC}"
     fi
     echo -e "${GRAY}──────────────────────────────────────────${NC}"
     

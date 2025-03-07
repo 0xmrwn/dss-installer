@@ -572,27 +572,27 @@ main() {
     if [[ "$AUTO_FIX" == true && "$fixes_attempted" == true ]]; then
         echo -e "${BRIGHT_WHITE}${BOLD}Auto-Fix Status:${NC}"
         if [[ "$fixes_succeeded" == true ]]; then
-            echo -e "${GREEN}✓ ${BRIGHT_GREEN}Some issues were successfully fixed automatically.${NC}"
+            echo -e "${GREEN}[✔] ${BRIGHT_GREEN}Some issues were successfully fixed automatically.${NC}"
         else
-            echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
+            echo -e "${YELLOW}[!]  ${BRIGHT_YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
         fi
         echo ""
     fi
     
     # Display reboot notification if needed
     if [[ "$reboot_required" == true ]]; then
-        echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}REBOOT REQUIRED: Some changes may require a system reboot.${NC}"
+        echo -e "${YELLOW}[!]  ${BRIGHT_YELLOW}REBOOT REQUIRED: Some changes may require a system reboot.${NC}"
         echo -e "${CYAN}Consider rebooting the system before proceeding with installation.${NC}"
         echo ""
     fi
     
     if [[ "$all_checks_passed" == true ]]; then
-        echo -e "${GREEN}✓ ${BRIGHT_GREEN}${BOLD}All diagnostic checks passed!${NC}"
+        echo -e "${GREEN}[✔] ${BRIGHT_GREEN}${BOLD}All diagnostic checks passed!${NC}"
         echo -e "${GREEN}The VM meets all requirements for Dataiku DSS installation.${NC}"
         log_message "All diagnostic checks passed"
         exit 0
     else
-        echo -e "${RED}✗ ${BRIGHT_RED}${BOLD}Some diagnostic checks failed.${NC}"
+        echo -e "${RED}[x] ${BRIGHT_RED}${BOLD}Some diagnostic checks failed.${NC}"
         echo -e "${RED}Please review the logs above and fix the issues before proceeding with installation.${NC}"
         echo ""
         echo -e "${BRIGHT_WHITE}Full logs are available at:${NC} ${CYAN}$LOG_FILE${NC}"
