@@ -196,6 +196,16 @@ main() {
     local port_range
     port_range=$(read_ini "$NODE_TYPE" "port_range")
     
+    # Read software check parameters from config file
+    local java_versions
+    java_versions=$(read_ini "$NODE_TYPE" "java_versions")
+    local python_versions
+    python_versions=$(read_ini "$NODE_TYPE" "python_versions")
+    local required_packages
+    required_packages=$(read_ini "$NODE_TYPE" "required_packages")
+    local required_repos
+    required_repos=$(read_ini "$NODE_TYPE" "required_repos")
+    
     # Print diagnostic parameters if verbose
     if [[ "$VERBOSE" == true ]]; then
         echo "Configuration Parameters:"
@@ -212,6 +222,10 @@ main() {
         echo "  - Required Open Files Limit: $ulimit_files"
         echo "  - Required User Processes Limit: $ulimit_processes"
         echo "  - Port Range to Check: $port_range"
+        echo "  - Required Java Versions: $java_versions"
+        echo "  - Required Python Versions: $python_versions"
+        echo "  - Required Packages: $required_packages"
+        echo "  - Required Repositories: $required_repos"
         echo ""
     fi
     
@@ -269,14 +283,23 @@ main() {
         all_checks_passed=false
     fi
     
-    # Add additional modules here as they're developed
-    # For example:
-    # if [[ -f "${SCRIPT_DIR}/modules/check_software.sh" ]]; then
-    #     source "${SCRIPT_DIR}/modules/check_software.sh"
-    #     if ! run_software_checks; then
-    #         all_checks_passed=false
-    #     fi
-    # fi
+    # Run software and dependency checks
+    if [[ -f "${SCRIPT_DIR}/modules/check_software.sh" ]]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running software and dependency checks" >> "$LOG_FILE"
+        
+        # Source the module to access its functions
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/modules/check_software.sh"
+        
+        # Run software checks with parameters from config
+        if ! run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
+            all_checks_passed=false
+        fi
+    else
+        echo -e "${RED}Error: Software check module not found at ${SCRIPT_DIR}/modules/check_software.sh${NC}"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Software check module not found" >> "$LOG_FILE"
+        all_checks_passed=false
+    fi
     
     # Print summary
     echo ""
