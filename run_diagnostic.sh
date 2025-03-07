@@ -21,6 +21,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Export colors for use in modules
+export GREEN RED YELLOW BLUE NC
+
 # Function to display usage information
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -86,7 +89,8 @@ read_ini() {
     local default="${3:-}"
     
     # Try to get value from specified section
-    local value=$(awk -F "=" -v section="[$section]" -v key="$key" '
+    local value
+    value=$(awk -F "=" -v section="[$section]" -v key="$key" '
         BEGIN { in_section = 0 }
         /^\[/ { in_section = ($0 == section) }
         in_section && $1 ~ "^[ \t]*"key"[ \t]*$" { gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }
@@ -161,18 +165,28 @@ main() {
     local all_checks_passed=true
     
     # Read OS check parameters from config file
-    local allowed_os_distros=$(read_ini "$NODE_TYPE" "allowed_os_distros")
-    local allowed_os_versions=$(read_ini "$NODE_TYPE" "allowed_os_versions")
-    local min_kernel_version=$(read_ini "$NODE_TYPE" "min_kernel_version")
-    local locale_required=$(read_ini "$NODE_TYPE" "locale_required")
+    local allowed_os_distros
+    allowed_os_distros=$(read_ini "$NODE_TYPE" "allowed_os_distros")
+    local allowed_os_versions
+    allowed_os_versions=$(read_ini "$NODE_TYPE" "allowed_os_versions")
+    local min_kernel_version
+    min_kernel_version=$(read_ini "$NODE_TYPE" "min_kernel_version")
+    local locale_required
+    locale_required=$(read_ini "$NODE_TYPE" "locale_required")
     
     # Read hardware check parameters from config file
-    local vcpus=$(read_ini "$NODE_TYPE" "vcpus")
-    local memory_gb=$(read_ini "$NODE_TYPE" "memory_gb")
-    local min_root_disk_gb=$(read_ini "$NODE_TYPE" "min_root_disk_gb")
-    local data_disk_mount=$(read_ini "$NODE_TYPE" "data_disk_mount")
-    local min_data_disk_gb=$(read_ini "$NODE_TYPE" "min_data_disk_gb")
-    local filesystem=$(read_ini "$NODE_TYPE" "filesystem")
+    local vcpus
+    vcpus=$(read_ini "$NODE_TYPE" "vcpus")
+    local memory_gb
+    memory_gb=$(read_ini "$NODE_TYPE" "memory_gb")
+    local min_root_disk_gb
+    min_root_disk_gb=$(read_ini "$NODE_TYPE" "min_root_disk_gb")
+    local data_disk_mount
+    data_disk_mount=$(read_ini "$NODE_TYPE" "data_disk_mount")
+    local min_data_disk_gb
+    min_data_disk_gb=$(read_ini "$NODE_TYPE" "min_data_disk_gb")
+    local filesystem
+    filesystem=$(read_ini "$NODE_TYPE" "filesystem")
     
     # Print diagnostic parameters if verbose
     if [[ "$VERBOSE" == true ]]; then
@@ -195,6 +209,7 @@ main() {
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Running OS checks" >> "$LOG_FILE"
         
         # Source the module to access its functions
+        # shellcheck disable=SC1091
         source "${SCRIPT_DIR}/modules/check_os.sh"
         
         # Run OS checks with parameters from config
@@ -212,6 +227,7 @@ main() {
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Running hardware checks" >> "$LOG_FILE"
         
         # Source the module to access its functions
+        # shellcheck disable=SC1091
         source "${SCRIPT_DIR}/modules/check_hardware.sh"
         
         # Run hardware checks with parameters from config
