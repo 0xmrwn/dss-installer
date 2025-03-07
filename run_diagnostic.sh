@@ -460,14 +460,13 @@ main() {
         # Global variable to store missing packages
         MISSING_PACKAGES=""
         MISSING_REPOS=""
-        MISSING_JAVA=false
         
         # Run software checks with parameters from config
         if ! run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
-            # If auto-fix is enabled, try to fix missing packages, repos, and Java
+            # If auto-fix is enabled, try to fix missing packages and repos
             if [[ "$AUTO_FIX" == true ]]; then
-                log_message "Software checks failed. Attempting auto-fix for Java installation and other software dependencies."
-                info "Software checks failed. Attempting auto-fix for Java installation and other software dependencies..."
+                log_message "Software checks failed. Attempting auto-fix for missing packages and repositories."
+                info "Software checks failed. Attempting auto-fix for missing packages and repositories..."
                 
                 # Check if we have global variables for missing packages/repos
                 if [[ -z "$MISSING_PACKAGES" ]]; then
@@ -478,11 +477,6 @@ main() {
                 if [[ -z "$MISSING_REPOS" ]]; then
                     # Fall back to log parsing if global variables aren't set
                     MISSING_REPOS=$(grep -a "FAIL: The following repositories are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
-                fi
-                
-                # Check for missing Java installation
-                if grep -q "FAIL: Java is not installed" "$LOG_FILE"; then
-                    MISSING_JAVA=true
                 fi
                 
                 # Check if missing packages were found
@@ -504,19 +498,6 @@ main() {
                         info "Repositories fixed, re-running software checks..."
                     else
                         fail "Failed to automatically configure missing repositories."
-                    fi
-                fi
-                
-                # Check if Java needs to be installed
-                if [[ "$MISSING_JAVA" == true ]]; then
-                    fixes_attempted=true
-                    info "Attempting to fix missing Java installation..."
-                    if auto_fix_by_issue "java" "$java_versions"; then
-                        info "Java installation succeeded, re-running software checks..."
-                    else
-                        fail "Failed to automatically install Java."
-                        log_message "Java auto-installation failed. Continuing with other checks."
-                        info "Manual Java installation will be required later."
                     fi
                 fi
                 
