@@ -373,30 +373,6 @@ main() {
         all_checks_passed=false
     fi
     
-    # Run filesystem checks
-    current_check=$((current_check + 1))
-    show_progress "$current_check" "$total_checks" "Filesystem Checks"
-    
-    if [[ -f "${SCRIPT_DIR}/modules/check_filesystem.sh" ]]; then
-        log_message "Running filesystem checks"
-        
-        # Source the module to access its functions
-        # shellcheck disable=SC1091
-        source "${SCRIPT_DIR}/modules/check_filesystem.sh"
-        
-        # Run filesystem checks with parameters from config
-        # Root mount is always "/", data mount comes from config
-        if ! run_filesystem_checks "/" "$data_disk_mount" "$filesystem"; then
-            # Filesystem checks usually require manual intervention, so we don't attempt auto-fixes
-            info "Filesystem checks failed. Manual intervention required."
-            all_checks_passed=false
-        fi
-    else
-        fail "Filesystem check module not found at ${SCRIPT_DIR}/modules/check_filesystem.sh"
-        log_message "Error: Filesystem check module not found"
-        all_checks_passed=false
-    fi
-    
     # Run system limits checks
     current_check=$((current_check + 1))
     show_progress "$current_check" "$total_checks" "System Settings and Limits Checks"
@@ -561,6 +537,30 @@ main() {
     else
         fail "Software check module not found at ${SCRIPT_DIR}/modules/check_software.sh"
         log_message "Error: Software check module not found"
+        all_checks_passed=false
+    fi
+    
+    # Run filesystem checks - MOVED TO AFTER SOFTWARE CHECKS
+    current_check=$((current_check + 1))
+    show_progress "$current_check" "$total_checks" "Filesystem Checks"
+    
+    if [[ -f "${SCRIPT_DIR}/modules/check_filesystem.sh" ]]; then
+        log_message "Running filesystem checks"
+        
+        # Source the module to access its functions
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/modules/check_filesystem.sh"
+        
+        # Run filesystem checks with parameters from config
+        # Root mount is always "/", data mount comes from config
+        if ! run_filesystem_checks "/" "$data_disk_mount" "$filesystem"; then
+            # Filesystem checks usually require manual intervention, so we don't attempt auto-fixes
+            info "Filesystem checks failed. Manual intervention required."
+            all_checks_passed=false
+        fi
+    else
+        fail "Filesystem check module not found at ${SCRIPT_DIR}/modules/check_filesystem.sh"
+        log_message "Error: Filesystem check module not found"
         all_checks_passed=false
     fi
     
