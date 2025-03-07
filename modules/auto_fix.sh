@@ -338,6 +338,44 @@ fix_java() {
     info "Attempting to install Java..."
     log_message "Attempting to install Java (required versions: $required_versions)"
     
+    # This ensures that newer versions (e.g., OpenJDK 17) are tried before older ones (e.g., OpenJDK 11)
+    # regardless of the order they are specified in the config file
+    local versions=()
+    local version_numbers=()
+    
+    # Parse the versions into arrays
+    for version in $(echo "$required_versions" | tr ',' ' '); do
+        if [[ "$version" == *"OpenJDK 11"* ]]; then
+            versions+=("OpenJDK 11")
+            version_numbers+=("11")
+        elif [[ "$version" == *"OpenJDK 17"* ]]; then
+            versions+=("OpenJDK 17")
+            version_numbers+=("17")
+        # Add checks for other versions as needed
+        fi
+    done
+    
+    # Simple bubble sort to arrange versions in descending order
+    for ((i=0; i<${#version_numbers[@]}; i++)); do
+        for ((j=i+1; j<${#version_numbers[@]}; j++)); do
+            if [[ "${version_numbers[i]}" -lt "${version_numbers[j]}" ]]; then
+                # Swap version numbers
+                local temp_num="${version_numbers[i]}"
+                version_numbers[i]="${version_numbers[j]}"
+                version_numbers[j]="$temp_num"
+                
+                # Swap version names
+                local temp_ver="${versions[i]}"
+                versions[i]="${versions[j]}"
+                versions[j]="$temp_ver"
+            fi
+        done
+    done
+    
+    # Log the prioritized versions
+    info "Prioritized Java versions: ${versions[*]}"
+    log_message "Attempting to install Java versions in order: ${versions[*]}"
+    
     # Initialize a flag for successful installation
     local install_success=false
     
@@ -345,91 +383,60 @@ fix_java() {
     if command -v apt-get &>/dev/null; then
         info "Using apt package manager..."
         
-        # For Debian/Ubuntu systems
-        if [[ "$required_versions" == *"OpenJDK 11"* ]]; then
-            info "Attempting to install OpenJDK 11..."
-            if sudo apt-get update && sudo apt-get install -y openjdk-11-jdk; then
+        # Try each version in order (latest first)
+        for ((i=0; i<${#versions[@]}; i++)); do
+            local version="${versions[i]}"
+            local version_num="${version_numbers[i]}"
+            
+            info "Attempting to install $version..."
+            if sudo apt-get update && sudo apt-get install -y "openjdk-${version_num}-jdk"; then
                 install_success=true
+                info "Successfully installed $version"
+                break
             else
-                warning "Failed to install OpenJDK 11 with apt. Installation error: $?"
-                log_message "Failed to install OpenJDK 11 with apt"
+                warning "Failed to install $version with apt. Installation error: $?"
+                log_message "Failed to install $version with apt"
+                # Continue with next version
             fi
-        elif [[ "$required_versions" == *"OpenJDK 17"* ]]; then
-            info "Attempting to install OpenJDK 17..."
-            if sudo apt-get update && sudo apt-get install -y openjdk-17-jdk; then
-                install_success=true
-            else
-                warning "Failed to install OpenJDK 17 with apt. Installation error: $?"
-                log_message "Failed to install OpenJDK 17 with apt"
-                # Fallback to 11 if 17 fails
-                info "Falling back to OpenJDK 11..."
-                if sudo apt-get install -y openjdk-11-jdk; then
-                    install_success=true
-                else
-                    warning "Failed to install fallback OpenJDK 11 with apt. Installation error: $?"
-                    log_message "Failed to install fallback OpenJDK 11 with apt"
-                fi
-            fi
-        fi
+        done
     elif command -v dnf &>/dev/null; then
         info "Using dnf package manager..."
         
-        # For RHEL/CentOS/AlmaLinux/Rocky Linux 8+
-        if [[ "$required_versions" == *"OpenJDK 11"* ]]; then
-            info "Attempting to install OpenJDK 11..."
-            if sudo dnf install -y java-11-openjdk-devel; then
+        # Try each version in order (latest first)
+        for ((i=0; i<${#versions[@]}; i++)); do
+            local version="${versions[i]}"
+            local version_num="${version_numbers[i]}"
+            
+            info "Attempting to install $version..."
+            if sudo dnf install -y "java-${version_num}-openjdk-devel"; then
                 install_success=true
+                info "Successfully installed $version"
+                break
             else
-                warning "Failed to install OpenJDK 11 with dnf. Installation error: $?"
-                log_message "Failed to install OpenJDK 11 with dnf"
+                warning "Failed to install $version with dnf. Installation error: $?"
+                log_message "Failed to install $version with dnf"
+                # Continue with next version
             fi
-        elif [[ "$required_versions" == *"OpenJDK 17"* ]]; then
-            info "Attempting to install OpenJDK 17..."
-            if sudo dnf install -y java-17-openjdk-devel; then
-                install_success=true
-            else
-                warning "Failed to install OpenJDK 17 with dnf. Installation error: $?"
-                log_message "Failed to install OpenJDK 17 with dnf"
-                # Fallback to 11 if 17 fails
-                info "Falling back to OpenJDK 11..."
-                if sudo dnf install -y java-11-openjdk-devel; then
-                    install_success=true
-                else
-                    warning "Failed to install fallback OpenJDK 11 with dnf. Installation error: $?"
-                    log_message "Failed to install fallback OpenJDK 11 with dnf"
-                fi
-            fi
-        fi
+        done
     elif command -v yum &>/dev/null; then
         info "Using yum package manager..."
         
-        # For older RHEL/CentOS systems
-        if [[ "$required_versions" == *"OpenJDK 11"* ]]; then
-            info "Attempting to install OpenJDK 11..."
-            if sudo yum install -y java-11-openjdk-devel; then
+        # Try each version in order (latest first)
+        for ((i=0; i<${#versions[@]}; i++)); do
+            local version="${versions[i]}"
+            local version_num="${version_numbers[i]}"
+            
+            info "Attempting to install $version..."
+            if sudo yum install -y "java-${version_num}-openjdk-devel"; then
                 install_success=true
+                info "Successfully installed $version"
+                break
             else
-                warning "Failed to install OpenJDK 11 with yum. Installation error: $?"
-                log_message "Failed to install OpenJDK 11 with yum"
+                warning "Failed to install $version with yum. Installation error: $?"
+                log_message "Failed to install $version with yum"
+                # Continue with next version
             fi
-        elif [[ "$required_versions" == *"OpenJDK 17"* ]]; then
-            info "Attempting to install OpenJDK 17..."
-            # Some systems may need additional repositories for Java 17
-            if sudo yum install -y java-17-openjdk-devel; then
-                install_success=true
-            else
-                warning "Failed to install OpenJDK 17 with yum. Installation error: $?"
-                log_message "Failed to install OpenJDK 17 with yum"
-                # Fallback to 11 if 17 fails
-                info "Falling back to OpenJDK 11..."
-                if sudo yum install -y java-11-openjdk-devel; then
-                    install_success=true
-                else
-                    warning "Failed to install fallback OpenJDK 11 with yum. Installation error: $?"
-                    log_message "Failed to install fallback OpenJDK 11 with yum"
-                fi
-            fi
-        fi
+        done
     else
         warning "No supported package manager found. Cannot auto-fix Java installation."
         return 1
@@ -440,8 +447,8 @@ fix_java() {
         return 0
     else
         fail "Failed to install Java. Please install manually or check repository access."
-        suggest "For RHEL/CentOS/AlmaLinux/Rocky: sudo dnf install java-11-openjdk-devel"
-        suggest "For Ubuntu/Debian: sudo apt-get install openjdk-11-jdk"
+        suggest "For RHEL/CentOS/AlmaLinux/Rocky: sudo dnf install java-11-openjdk-devel or java-17-openjdk-devel"
+        suggest "For Ubuntu/Debian: sudo apt-get install openjdk-11-jdk or openjdk-17-jdk"
         return 1
     fi
 }
