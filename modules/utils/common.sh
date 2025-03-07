@@ -42,8 +42,12 @@ pass() {
 # Function to display a fail message
 fail() {
     local message="$1"
+    local details="${2:-}"
     echo -e "${RED}[FAIL] $message${NC}"
-    log_message "FAIL: $message"
+    if [[ -n "$details" ]]; then
+        echo -e "${RED}       $details${NC}"
+    fi
+    log_message "FAIL: $message $details"
 }
 
 # Function to display a warning message

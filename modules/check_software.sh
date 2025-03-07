@@ -106,6 +106,9 @@ check_packages() {
     
     info "Checking essential packages..."
     
+    # Store missing packages in a global variable for auto-fix
+    export MISSING_PACKAGES=""
+    
     # Determine package manager
     if command -v apt-get &>/dev/null; then
         package_manager="apt"
@@ -159,6 +162,9 @@ check_packages() {
     done
     
     if [[ -n "$missing_packages" ]]; then
+        # Store in global variable for auto-fix
+        export MISSING_PACKAGES="$missing_packages"
+        
         fail "The following packages are missing:$missing_packages"
         
         case $package_manager in
@@ -186,6 +192,9 @@ check_repository_access() {
     local package_manager=""
     
     info "Checking repository access..."
+    
+    # Store missing repos in a global variable for auto-fix
+    export MISSING_REPOS=""
     
     # Determine package manager
     if command -v apt-get &>/dev/null; then
@@ -228,6 +237,9 @@ check_repository_access() {
     esac
     
     if [[ -n "$missing_repos" ]]; then
+        # Store in global variable for auto-fix
+        export MISSING_REPOS="$missing_repos"
+        
         fail "The following repositories are missing:$missing_repos"
         
         if [[ "$missing_repos" == *"EPEL"* ]]; then

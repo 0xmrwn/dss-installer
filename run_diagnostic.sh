@@ -20,6 +20,7 @@ LOG_FILE="${SCRIPT_DIR}/diagnostics.log"
 NODE_TYPE="DESIGN"
 VERBOSE=false
 AUTO_FIX=false  # Added default auto-fix flag
+NON_INTERACTIVE=false  # Add non-interactive mode flag
 
 # Check for common utilities using absolute path
 if [[ ! -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
@@ -43,6 +44,7 @@ usage() {
     echo "  -l, --log FILE       Path to log file (default: diagnostics.log)"
     echo "  -v, --verbose        Enable verbose output"
     echo "  --auto-fix           Attempt to automatically fix non-sensitive issues"
+    echo "  --non-interactive    Run in non-interactive mode, don't prompt for confirmations"
     echo "  -h, --help           Display this help message and exit"
     echo ""
     exit 1
@@ -70,6 +72,10 @@ parse_args() {
                 ;;
             --auto-fix)
                 AUTO_FIX=true
+                shift
+                ;;
+            --non-interactive)
+                NON_INTERACTIVE=true
                 shift
                 ;;
             -h|--help)
@@ -139,7 +145,8 @@ init_log() {
         echo "===========================================" 
         echo "Node Type: $NODE_TYPE"
         echo "Config File: $CONFIG_FILE"
-        echo "Auto-Fix: $AUTO_FIX"  # Added auto-fix flag to log header
+        echo "Auto-Fix: $AUTO_FIX"
+        echo "Non-Interactive: $NON_INTERACTIVE"
         echo "===========================================" 
     } > "$LOG_FILE"
     
@@ -158,9 +165,12 @@ show_banner() {
     echo "Running diagnostics at $(date '+%Y-%m-%d %H:%M:%S')"
     echo "Log file: $LOG_FILE"
     if [[ "$AUTO_FIX" == true ]]; then
-        echo "Auto-Fix: Enabled"  # Display auto-fix status in banner
+        echo "Auto-Fix: Enabled"
     else
         echo "Auto-Fix: Disabled"
+    fi
+    if [[ "$NON_INTERACTIVE" == true ]]; then
+        echo "Mode: Non-Interactive"
     fi
     echo "---------------------------------------------------"
     echo ""
@@ -179,14 +189,37 @@ main() {
     
     # Export variables for modules
     export VERBOSE
-    export AUTO_FIX  # Export auto-fix flag for modules
-    
-    # Track overall diagnostic status
-    local all_checks_passed=true
+    export AUTO_FIX
+    export NON_INTERACTIVE
     
     # Track whether auto-fixes were attempted
     local fixes_attempted=false
     local fixes_succeeded=false
+    local reboot_required=false
+    
+    # Pre-load auto-fix module if auto-fix is enabled
+    if [[ "$AUTO_FIX" == true ]]; then
+        if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
+            # shellcheck disable=SC1091
+            source "${SCRIPT_DIR}/modules/auto_fix.sh"
+            # Check sudo permissions
+            if ! check_sudo_permissions; then
+                warning "Auto-fix is enabled but sudo permissions are not available."
+                warning "Some fixes may fail. Consider running as a user with sudo privileges."
+            fi
+        else
+            warning "Auto-fix module not found at ${SCRIPT_DIR}/modules/auto_fix.sh"
+            warning "Auto-fix functionality will be disabled."
+            AUTO_FIX=false
+        fi
+    fi
+    
+    # Track overall diagnostic status
+    local all_checks_passed=true
+    
+    # Setup progress tracking
+    local total_checks=5  # OS, hardware, limits, network, software
+    local current_check=0
     
     # Read OS check parameters from config file
     local allowed_os_distros
@@ -254,6 +287,9 @@ main() {
     fi
     
     # Run OS checks
+    current_check=$((current_check + 1))
+    echo "Running check $current_check of $total_checks: OS and System Checks"
+    
     if [[ -f "${SCRIPT_DIR}/modules/check_os.sh" ]]; then
         log_message "Running OS checks"
         
@@ -268,28 +304,21 @@ main() {
                 log_message "OS checks failed. Attempting auto-fix for locale issues."
                 info "OS checks failed. Attempting auto-fix for locale issues..."
                 
-                # Source the auto-fix module
-                # shellcheck disable=SC1091
-                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
-                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
-                    
-                    # Attempt to fix locale issues
-                    fixes_attempted=true
-                    if auto_fix_by_issue "locale" "$locale_required"; then
-                        # Re-run OS checks to verify if fix succeeded
-                        if run_os_checks "$allowed_os_distros" "$allowed_os_versions" "$min_kernel_version" "$locale_required"; then
-                            pass "OS locale issues fixed successfully!"
-                            fixes_succeeded=true
-                        else
-                            fail "OS locale issues could not be fixed automatically."
-                            all_checks_passed=false
-                        fi
+                # Attempt to fix locale issues
+                fixes_attempted=true
+                if auto_fix_by_issue "locale" "$locale_required"; then
+                    # Re-run OS checks to verify if fix succeeded
+                    if run_os_checks "$allowed_os_distros" "$allowed_os_versions" "$min_kernel_version" "$locale_required"; then
+                        pass "OS locale issues fixed successfully!"
+                        fixes_succeeded=true
+                        # Mark for potential reboot
+                        reboot_required=true
                     else
-                        fail "Failed to automatically fix locale issues."
+                        fail "OS locale issues could not be fixed automatically."
                         all_checks_passed=false
                     fi
                 else
-                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    fail "Failed to automatically fix locale issues."
                     all_checks_passed=false
                 fi
             else
@@ -303,6 +332,9 @@ main() {
     fi
     
     # Run hardware checks
+    current_check=$((current_check + 1))
+    echo "Running check $current_check of $total_checks: Hardware Checks"
+    
     if [[ -f "${SCRIPT_DIR}/modules/check_hardware.sh" ]]; then
         log_message "Running hardware checks"
         
@@ -323,6 +355,9 @@ main() {
     fi
     
     # Run system limits checks
+    current_check=$((current_check + 1))
+    echo "Running check $current_check of $total_checks: System Settings and Limits Checks"
+    
     if [[ -f "${SCRIPT_DIR}/modules/check_limits.sh" ]]; then
         log_message "Running system limits checks"
         
@@ -332,33 +367,33 @@ main() {
         
         # Run system limits checks with parameters from config
         if ! run_limits_checks "$ulimit_files" "$ulimit_processes"; then
-            # If auto-fix is enabled, try to fix time sync issues
+            # If auto-fix is enabled, try to fix time sync and ulimit issues
             if [[ "$AUTO_FIX" == true ]]; then
-                log_message "System limits checks failed. Attempting auto-fix for time sync issues."
-                info "System limits checks failed. Attempting auto-fix for time sync issues..."
+                log_message "System limits checks failed. Attempting auto-fix..."
+                info "System limits checks failed. Attempting auto-fix..."
                 
-                # Source the auto-fix module
-                # shellcheck disable=SC1091
-                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
-                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
-                    
-                    # Attempt to fix time sync issues
-                    fixes_attempted=true
-                    if auto_fix_by_issue "time_sync"; then
-                        # Re-run limits checks to verify if fix succeeded
-                        if run_limits_checks "$ulimit_files" "$ulimit_processes"; then
-                            pass "Time synchronization issues fixed successfully!"
-                            fixes_succeeded=true
-                        else
-                            fail "System limits issues could not be fixed automatically."
-                            all_checks_passed=false
-                        fi
-                    else
-                        fail "Failed to automatically fix time synchronization issues."
-                        all_checks_passed=false
-                    fi
+                # First try to fix ulimit settings
+                fixes_attempted=true
+                if auto_fix_by_issue "ulimits" "$ulimit_files" "$ulimit_processes"; then
+                    info "Ulimit settings updated. Continuing with other fixes..."
+                    reboot_required=true
                 else
-                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    warning "Failed to fix ulimit settings. Continuing with other fixes..."
+                fi
+                
+                # Try to fix time sync issues
+                if auto_fix_by_issue "time_sync"; then
+                    info "Time synchronization configured. Re-running checks..."
+                else
+                    warning "Failed to fix time synchronization. Continuing..."
+                fi
+                
+                # Re-run limits checks to verify if fixes succeeded
+                if run_limits_checks "$ulimit_files" "$ulimit_processes"; then
+                    pass "System limits issues fixed successfully!"
+                    fixes_succeeded=true
+                else
+                    fail "Some system limits issues could not be fixed automatically."
                     all_checks_passed=false
                 fi
             else
@@ -372,6 +407,9 @@ main() {
     fi
     
     # Run network and connectivity checks
+    current_check=$((current_check + 1))
+    echo "Running check $current_check of $total_checks: Network and Connectivity Checks"
+    
     if [[ -f "${SCRIPT_DIR}/modules/check_network.sh" ]]; then
         log_message "Running network and connectivity checks"
         
@@ -392,6 +430,9 @@ main() {
     fi
     
     # Run software and dependency checks
+    current_check=$((current_check + 1))
+    echo "Running check $current_check of $total_checks: Software and Dependency Checks"
+    
     if [[ -f "${SCRIPT_DIR}/modules/check_software.sh" ]]; then
         log_message "Running software and dependency checks"
         
@@ -399,8 +440,9 @@ main() {
         # shellcheck disable=SC1091
         source "${SCRIPT_DIR}/modules/check_software.sh"
         
-        # Get missing packages before running checks
-        local missing_packages=""
+        # Global variable to store missing packages
+        MISSING_PACKAGES=""
+        MISSING_REPOS=""
         
         # Run software checks with parameters from config
         if ! run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
@@ -409,50 +451,45 @@ main() {
                 log_message "Software checks failed. Attempting auto-fix for missing packages and repositories."
                 info "Software checks failed. Attempting auto-fix for missing packages and repositories..."
                 
-                # Source the auto-fix module
-                # shellcheck disable=SC1091
-                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
-                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
-                    
-                    # Extract missing packages from the log file
-                    missing_packages=$(grep -a "FAIL: The following packages are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
-                    
-                    # Check if missing packages were found
-                    if [[ -n "$missing_packages" ]]; then
-                        # Attempt to fix missing packages
-                        fixes_attempted=true
-                        if auto_fix_by_issue "packages" "$missing_packages"; then
-                            info "Packages fixed, checking repositories..."
-                        else
-                            fail "Failed to automatically install missing packages."
-                        fi
-                    fi
-                    
-                    # Extract missing repositories from the log file
-                    local missing_repos
-                    missing_repos=$(grep -a "FAIL: The following repositories are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
-                    
-                    # Check if missing repositories were found
-                    if [[ -n "$missing_repos" ]]; then
-                        # Attempt to fix missing repositories
-                        fixes_attempted=true
-                        if auto_fix_by_issue "repositories" "$missing_repos"; then
-                            info "Repositories fixed, re-running software checks..."
-                        else
-                            fail "Failed to automatically configure missing repositories."
-                        fi
-                    fi
-                    
-                    # Re-run software checks to verify if fixes succeeded
-                    if run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
-                        pass "Software issues fixed successfully!"
-                        fixes_succeeded=true
+                # Check if we have global variables for missing packages/repos
+                if [[ -z "$MISSING_PACKAGES" ]]; then
+                    # Fall back to log parsing if global variables aren't set
+                    MISSING_PACKAGES=$(grep -a "FAIL: The following packages are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
+                fi
+                
+                if [[ -z "$MISSING_REPOS" ]]; then
+                    # Fall back to log parsing if global variables aren't set
+                    MISSING_REPOS=$(grep -a "FAIL: The following repositories are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
+                fi
+                
+                # Check if missing packages were found
+                if [[ -n "$MISSING_PACKAGES" ]]; then
+                    # Attempt to fix missing packages
+                    fixes_attempted=true
+                    if auto_fix_by_issue "packages" "$MISSING_PACKAGES"; then
+                        info "Packages fixed, checking repositories..."
                     else
-                        fail "Some software issues could not be fixed automatically."
-                        all_checks_passed=false
+                        fail "Failed to automatically install missing packages."
                     fi
+                fi
+                
+                # Check if missing repositories were found
+                if [[ -n "$MISSING_REPOS" ]]; then
+                    # Attempt to fix missing repositories
+                    fixes_attempted=true
+                    if auto_fix_by_issue "repositories" "$MISSING_REPOS"; then
+                        info "Repositories fixed, re-running software checks..."
+                    else
+                        fail "Failed to automatically configure missing repositories."
+                    fi
+                fi
+                
+                # Re-run software checks to verify if fixes succeeded
+                if run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
+                    pass "Software issues fixed successfully!"
+                    fixes_succeeded=true
                 else
-                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    fail "Some software issues could not be fixed automatically."
                     all_checks_passed=false
                 fi
             else
@@ -478,6 +515,13 @@ main() {
         else
             echo -e "${YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
         fi
+        echo ""
+    fi
+    
+    # Display reboot notification if needed
+    if [[ "$reboot_required" == true ]]; then
+        echo -e "${YELLOW}Some changes may require a system reboot to fully take effect.${NC}"
+        echo "Consider rebooting the system before proceeding with installation."
         echo ""
     fi
     

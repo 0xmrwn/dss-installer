@@ -68,7 +68,7 @@ To run the diagnostic tool with default settings:
 ./run_diagnostic.sh
 ```
 
-### Command-line Options
+## Command-line Options
 
 The tool supports the following command-line options:
 
@@ -77,6 +77,7 @@ The tool supports the following command-line options:
 - `-l, --log FILE`: Path to log file (default: `diagnostics.log`)
 - `-v, --verbose`: Enable verbose output
 - `--auto-fix`: Attempt to automatically fix non-sensitive issues
+- `--non-interactive`: Run in non-interactive mode without prompting for confirmations
 - `-h, --help`: Display help message and exit
 
 ### Examples
@@ -96,25 +97,43 @@ Run diagnostics with a custom configuration file:
 ./run_diagnostic.sh -c custom_config.ini
 ```
 
-Run diagnostics with automatic fixes for non-sensitive issues:
+Run diagnostics with automatic fixes in non-interactive mode:
 ```bash
-./run_diagnostic.sh --auto-fix
+./run_diagnostic.sh --auto-fix --non-interactive
 ```
 
 ## Auto-Fix Feature
 
-The tool includes an auto-fix feature that can automatically remediate some common issues:
+The tool includes an auto-fix feature that can automatically remediate common issues:
 
-- **Locale Settings**: Can install and configure the required locale
-- **Missing Packages**: Can install required packages using the appropriate package manager
-- **Time Synchronization**: Can install and configure time synchronization services
-- **Repository Configuration**: Can configure required repositories (e.g., EPEL)
+- **Locale Settings**: Installs and configures the required locale
+- **Missing Packages**: Installs required packages using the appropriate package manager
+- **Time Synchronization**: Installs and configures time synchronization services (chronyd/chrony/ntpd)
+- **Repository Configuration**: Configures required repositories (e.g., EPEL)
+- **Ulimit Settings**: Updates system limits for open files and processes
+
+When the auto-fix feature makes changes that may require a system reboot to take full effect (like ulimit or locale changes), a notification will be displayed in the summary.
 
 To enable the auto-fix feature, use the `--auto-fix` flag:
 
 ```bash
 ./run_diagnostic.sh --auto-fix
 ```
+
+For automated deployments, you can combine auto-fix with non-interactive mode:
+
+```bash
+./run_diagnostic.sh --auto-fix --non-interactive
+```
+
+### Auto-Fix Safety Features
+
+The auto-fix feature includes several safety mechanisms:
+
+1. **Sudo Permission Check**: Verifies that the user has sudo permissions before attempting fixes
+2. **User Confirmation**: Prompts for confirmation before making system changes (unless in non-interactive mode)
+3. **Reboot Notification**: Alerts when changes may require a system reboot
+4. **Verification**: Re-runs checks after fixes to confirm they were successful
 
 ### Limitations of Auto-Fix
 
@@ -128,6 +147,10 @@ The auto-fix feature is limited to non-sensitive issues. It **cannot** automatic
 These issues require manual intervention.
 
 > **Note**: The auto-fix feature requires sudo privileges to make system-level changes. Make sure the user running the script has appropriate permissions.
+
+## Progress Tracking
+
+The diagnostic tool includes progress tracking that shows which check is currently running and how many checks remain. This makes it easier to follow the diagnostic process and understand where you are in the overall workflow.
 
 ## Project Structure
 

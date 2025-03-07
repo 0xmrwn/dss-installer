@@ -14,6 +14,15 @@ else
     exit 1
 fi
 
+# Add to auto_fix.sh at the beginning
+check_sudo_permissions() {
+    if ! sudo -n true 2>/dev/null; then
+        fail "Auto-fix requires sudo privileges. Please run with a user that has sudo permissions."
+        return 1
+    fi
+    return 0
+}
+
 # Function to fix locale issues
 fix_locale() {
     local required_locale="$1"
@@ -107,10 +116,13 @@ fix_packages() {
     info "Attempting to install missing packages: $missing_packages"
     log_message "Attempting to install missing packages: $missing_packages"
     
+    # Convert string to array to handle spaces correctly
+    read -ra packages_array <<< "$missing_packages"
+    
     # Determine package manager
     if command -v apt-get &>/dev/null; then
         info "Using apt package manager..."
-        if sudo apt-get update && sudo apt-get install -y $missing_packages; then
+        if sudo apt-get update && sudo apt-get install -y "${packages_array[@]}"; then
             pass "Successfully installed missing packages: $missing_packages"
             return 0
         else
@@ -119,7 +131,7 @@ fix_packages() {
         fi
     elif command -v dnf &>/dev/null; then
         info "Using dnf package manager..."
-        if sudo dnf install -y $missing_packages; then
+        if sudo dnf install -y "${packages_array[@]}"; then
             pass "Successfully installed missing packages: $missing_packages"
             return 0
         else
@@ -128,7 +140,7 @@ fix_packages() {
         fi
     elif command -v yum &>/dev/null; then
         info "Using yum package manager..."
-        if sudo yum install -y $missing_packages; then
+        if sudo yum install -y "${packages_array[@]}"; then
             pass "Successfully installed missing packages: $missing_packages"
             return 0
         else
@@ -152,13 +164,22 @@ fix_time_sync() {
     if command -v systemctl &>/dev/null; then
         # Check if chronyd is already installed
         if command -v chronyc &>/dev/null; then
-            info "chronyd is already installed, enabling and starting service..."
+            info "chronyd/chrony is already installed, enabling and starting service..."
             installed_service=true
-            if sudo systemctl enable chronyd && sudo systemctl start chronyd; then
-                pass "Successfully enabled and started chronyd service"
-                return 0
+            # Try chronyd first (RHEL/CentOS)
+            if systemctl list-unit-files | grep -q chronyd; then
+                if sudo systemctl enable chronyd && sudo systemctl start chronyd; then
+                    pass "Successfully enabled and started chronyd service"
+                    return 0
+                fi
+            # Then try chrony (Ubuntu/Debian)
+            elif systemctl list-unit-files | grep -q chrony; then
+                if sudo systemctl enable chrony && sudo systemctl start chrony; then
+                    pass "Successfully enabled and started chrony service"
+                    return 0
+                fi
             else
-                fail "Failed to enable and start chronyd service"
+                fail "Failed to enable and start time synchronization service"
             fi
         # Check if ntpd is already installed
         elif command -v ntpd &>/dev/null; then
@@ -237,41 +258,84 @@ fix_repositories() {
     info "Attempting to configure missing repositories: $missing_repos"
     log_message "Attempting to configure missing repositories: $missing_repos"
     
-    # Check for EPEL repository
-    if [[ "$missing_repos" == *"EPEL"* ]]; then
-        # Determine package manager and OS version
-        if command -v dnf &>/dev/null; then
-            info "Using dnf to install EPEL repository..."
-            if sudo dnf install -y epel-release; then
-                pass "Successfully installed EPEL repository"
-                return 0
+    # Convert string to array to handle spaces correctly
+    read -ra repos_array <<< "$missing_repos"
+    
+    # Process each repository individually
+    for repo in "${repos_array[@]}"; do
+        # Check for EPEL repository
+        if [[ "$repo" == "EPEL" ]]; then
+            # Determine package manager and OS version
+            if command -v dnf &>/dev/null; then
+                info "Using dnf to install EPEL repository..."
+                if sudo dnf install -y epel-release; then
+                    pass "Successfully installed EPEL repository"
+                else
+                    fail "Failed to install EPEL repository with dnf"
+                    return 1
+                fi
+            elif command -v yum &>/dev/null; then
+                info "Using yum to install EPEL repository..."
+                if sudo yum install -y epel-release; then
+                    pass "Successfully installed EPEL repository"
+                else
+                    fail "Failed to install EPEL repository with yum"
+                    return 1
+                fi
             else
-                fail "Failed to install EPEL repository with dnf"
-                return 1
-            fi
-        elif command -v yum &>/dev/null; then
-            info "Using yum to install EPEL repository..."
-            if sudo yum install -y epel-release; then
-                pass "Successfully installed EPEL repository"
-                return 0
-            else
-                fail "Failed to install EPEL repository with yum"
+                warning "No supported package manager found for installing EPEL repository"
                 return 1
             fi
         else
-            warning "No supported package manager found for installing EPEL repository"
-            return 1
+            warning "Auto-fix for repository '$repo' not implemented"
+            # Continue with other repositories rather than failing immediately
         fi
-    else
-        warning "Auto-fix for repository '$missing_repos' not implemented"
+    done
+    
+    # If we got here, at least one repository was processed
+    return 0
+}
+
+# Function to fix ulimit settings
+fix_ulimits() {
+    local required_files="$1"
+    local required_processes="$2"
+    
+    info "Attempting to fix ulimit settings..."
+    log_message "Attempting to fix ulimit settings"
+    
+    # Create limits.conf entry
+    local limits_file="/etc/security/limits.conf"
+    local temp_file
+    temp_file=$(mktemp)
+    
+    # Check if we can write to the file
+    if ! sudo test -w "$limits_file"; then
+        fail "Cannot write to $limits_file. Ulimit settings cannot be fixed."
         return 1
     fi
+    
+    # Create new limits entries
+    sudo cat "$limits_file" | sudo tee "$temp_file" > /dev/null
+    echo "# Added by Dataiku DSS diagnostic auto-fix" | sudo tee -a "$temp_file" > /dev/null
+    echo "* soft nofile $required_files" | sudo tee -a "$temp_file" > /dev/null
+    echo "* hard nofile $required_files" | sudo tee -a "$temp_file" > /dev/null
+    echo "* soft nproc $required_processes" | sudo tee -a "$temp_file" > /dev/null
+    echo "* hard nproc $required_processes" | sudo tee -a "$temp_file" > /dev/null
+    
+    # Replace the original file
+    sudo cp "$temp_file" "$limits_file"
+    rm "$temp_file"
+    
+    pass "Ulimit settings updated. You may need to log out and back in for changes to take effect."
+    return 0
 }
 
 # Main auto-fix function that calls fixes based on issue type
 auto_fix_by_issue() {
     local issue="$1"
     local param="${2:-}"
+    local param2="${3:-}"
     
     case "$issue" in
         "locale")
@@ -286,9 +350,27 @@ auto_fix_by_issue() {
         "repositories")
             fix_repositories "$param" # $param = list of missing repositories
             ;;
+        "ulimits")
+            fix_ulimits "$param" "$param2" # $param = required files, $param2 = required processes
+            ;;
         *)
             warning "No auto-fix routine defined for issue: $issue"
             return 1
             ;;
     esac
+}
+
+# Add to auto_fix.sh
+confirm_action() {
+    local message="$1"
+    
+    # Skip confirmation if running in non-interactive mode
+    if [[ -t 0 ]]; then
+        echo -e "${YELLOW}$message${NC} (y/n) "
+        read -r answer
+        if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+    return 0
 } 
