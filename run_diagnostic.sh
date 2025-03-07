@@ -19,6 +19,7 @@ CONFIG_FILE="${SCRIPT_DIR}/config.ini"
 LOG_FILE="${SCRIPT_DIR}/diagnostics.log"
 NODE_TYPE="DESIGN"
 VERBOSE=false
+AUTO_FIX=false  # Added default auto-fix flag
 
 # Check for common utilities using absolute path
 if [[ ! -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
@@ -41,6 +42,7 @@ usage() {
     echo "  -n, --node TYPE      Node type: DESIGN, AUTO (default: DESIGN)"
     echo "  -l, --log FILE       Path to log file (default: diagnostics.log)"
     echo "  -v, --verbose        Enable verbose output"
+    echo "  --auto-fix           Attempt to automatically fix non-sensitive issues"
     echo "  -h, --help           Display this help message and exit"
     echo ""
     exit 1
@@ -64,6 +66,10 @@ parse_args() {
                 ;;
             -v|--verbose)
                 VERBOSE=true
+                shift
+                ;;
+            --auto-fix)
+                AUTO_FIX=true
                 shift
                 ;;
             -h|--help)
@@ -133,6 +139,7 @@ init_log() {
         echo "===========================================" 
         echo "Node Type: $NODE_TYPE"
         echo "Config File: $CONFIG_FILE"
+        echo "Auto-Fix: $AUTO_FIX"  # Added auto-fix flag to log header
         echo "===========================================" 
     } > "$LOG_FILE"
     
@@ -150,6 +157,11 @@ show_banner() {
     echo "Node Type: $NODE_TYPE"
     echo "Running diagnostics at $(date '+%Y-%m-%d %H:%M:%S')"
     echo "Log file: $LOG_FILE"
+    if [[ "$AUTO_FIX" == true ]]; then
+        echo "Auto-Fix: Enabled"  # Display auto-fix status in banner
+    else
+        echo "Auto-Fix: Disabled"
+    fi
     echo "---------------------------------------------------"
     echo ""
 }
@@ -167,9 +179,14 @@ main() {
     
     # Export variables for modules
     export VERBOSE
+    export AUTO_FIX  # Export auto-fix flag for modules
     
     # Track overall diagnostic status
     local all_checks_passed=true
+    
+    # Track whether auto-fixes were attempted
+    local fixes_attempted=false
+    local fixes_succeeded=false
     
     # Read OS check parameters from config file
     local allowed_os_distros
@@ -246,7 +263,38 @@ main() {
         
         # Run OS checks with parameters from config
         if ! run_os_checks "$allowed_os_distros" "$allowed_os_versions" "$min_kernel_version" "$locale_required"; then
-            all_checks_passed=false
+            # If auto-fix is enabled, try to fix locale issues
+            if [[ "$AUTO_FIX" == true ]]; then
+                log_message "OS checks failed. Attempting auto-fix for locale issues."
+                info "OS checks failed. Attempting auto-fix for locale issues..."
+                
+                # Source the auto-fix module
+                # shellcheck disable=SC1091
+                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
+                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
+                    
+                    # Attempt to fix locale issues
+                    fixes_attempted=true
+                    if auto_fix_by_issue "locale" "$locale_required"; then
+                        # Re-run OS checks to verify if fix succeeded
+                        if run_os_checks "$allowed_os_distros" "$allowed_os_versions" "$min_kernel_version" "$locale_required"; then
+                            pass "OS locale issues fixed successfully!"
+                            fixes_succeeded=true
+                        else
+                            fail "OS locale issues could not be fixed automatically."
+                            all_checks_passed=false
+                        fi
+                    else
+                        fail "Failed to automatically fix locale issues."
+                        all_checks_passed=false
+                    fi
+                else
+                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    all_checks_passed=false
+                fi
+            else
+                all_checks_passed=false
+            fi
         fi
     else
         fail "OS check module not found at ${SCRIPT_DIR}/modules/check_os.sh"
@@ -264,6 +312,8 @@ main() {
         
         # Run hardware checks with parameters from config
         if ! run_hardware_checks "$vcpus" "$memory_gb" "$min_root_disk_gb" "$data_disk_mount" "$min_data_disk_gb" "$filesystem"; then
+            # Hardware checks usually require manual intervention, so we don't attempt auto-fixes
+            info "Hardware checks failed. Manual intervention required."
             all_checks_passed=false
         fi
     else
@@ -282,7 +332,38 @@ main() {
         
         # Run system limits checks with parameters from config
         if ! run_limits_checks "$ulimit_files" "$ulimit_processes"; then
-            all_checks_passed=false
+            # If auto-fix is enabled, try to fix time sync issues
+            if [[ "$AUTO_FIX" == true ]]; then
+                log_message "System limits checks failed. Attempting auto-fix for time sync issues."
+                info "System limits checks failed. Attempting auto-fix for time sync issues..."
+                
+                # Source the auto-fix module
+                # shellcheck disable=SC1091
+                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
+                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
+                    
+                    # Attempt to fix time sync issues
+                    fixes_attempted=true
+                    if auto_fix_by_issue "time_sync"; then
+                        # Re-run limits checks to verify if fix succeeded
+                        if run_limits_checks "$ulimit_files" "$ulimit_processes"; then
+                            pass "Time synchronization issues fixed successfully!"
+                            fixes_succeeded=true
+                        else
+                            fail "System limits issues could not be fixed automatically."
+                            all_checks_passed=false
+                        fi
+                    else
+                        fail "Failed to automatically fix time synchronization issues."
+                        all_checks_passed=false
+                    fi
+                else
+                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    all_checks_passed=false
+                fi
+            else
+                all_checks_passed=false
+            fi
         fi
     else
         fail "System limits check module not found at ${SCRIPT_DIR}/modules/check_limits.sh"
@@ -300,6 +381,8 @@ main() {
         
         # Run network checks with parameters from config
         if ! run_network_checks "$port_range"; then
+            # Network issues often require manual intervention, so we don't attempt auto-fixes
+            info "Network checks failed. Manual intervention required."
             all_checks_passed=false
         fi
     else
@@ -316,9 +399,65 @@ main() {
         # shellcheck disable=SC1091
         source "${SCRIPT_DIR}/modules/check_software.sh"
         
+        # Get missing packages before running checks
+        local missing_packages=""
+        
         # Run software checks with parameters from config
         if ! run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
-            all_checks_passed=false
+            # If auto-fix is enabled, try to fix missing packages and repos
+            if [[ "$AUTO_FIX" == true ]]; then
+                log_message "Software checks failed. Attempting auto-fix for missing packages and repositories."
+                info "Software checks failed. Attempting auto-fix for missing packages and repositories..."
+                
+                # Source the auto-fix module
+                # shellcheck disable=SC1091
+                if [[ -f "${SCRIPT_DIR}/modules/auto_fix.sh" ]]; then
+                    source "${SCRIPT_DIR}/modules/auto_fix.sh"
+                    
+                    # Extract missing packages from the log file
+                    missing_packages=$(grep -a "FAIL: The following packages are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
+                    
+                    # Check if missing packages were found
+                    if [[ -n "$missing_packages" ]]; then
+                        # Attempt to fix missing packages
+                        fixes_attempted=true
+                        if auto_fix_by_issue "packages" "$missing_packages"; then
+                            info "Packages fixed, checking repositories..."
+                        else
+                            fail "Failed to automatically install missing packages."
+                        fi
+                    fi
+                    
+                    # Extract missing repositories from the log file
+                    local missing_repos
+                    missing_repos=$(grep -a "FAIL: The following repositories are missing:" "$LOG_FILE" | tail -1 | sed 's/.*missing://')
+                    
+                    # Check if missing repositories were found
+                    if [[ -n "$missing_repos" ]]; then
+                        # Attempt to fix missing repositories
+                        fixes_attempted=true
+                        if auto_fix_by_issue "repositories" "$missing_repos"; then
+                            info "Repositories fixed, re-running software checks..."
+                        else
+                            fail "Failed to automatically configure missing repositories."
+                        fi
+                    fi
+                    
+                    # Re-run software checks to verify if fixes succeeded
+                    if run_software_checks "$java_versions" "$python_versions" "$required_packages" "$required_repos"; then
+                        pass "Software issues fixed successfully!"
+                        fixes_succeeded=true
+                    else
+                        fail "Some software issues could not be fixed automatically."
+                        all_checks_passed=false
+                    fi
+                else
+                    warning "Auto-fix module not found. Skipping auto-fix attempt."
+                    all_checks_passed=false
+                fi
+            else
+                all_checks_passed=false
+            fi
         fi
     else
         fail "Software check module not found at ${SCRIPT_DIR}/modules/check_software.sh"
@@ -331,6 +470,16 @@ main() {
     echo "====================================================="
     echo "                 Diagnostic Summary"
     echo "====================================================="
+    
+    if [[ "$AUTO_FIX" == true && "$fixes_attempted" == true ]]; then
+        echo -e "${BLUE}Auto-fix was enabled and attempted to fix some issues.${NC}"
+        if [[ "$fixes_succeeded" == true ]]; then
+            echo -e "${GREEN}Some issues were successfully fixed automatically.${NC}"
+        else
+            echo -e "${YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
+        fi
+        echo ""
+    fi
     
     if [[ "$all_checks_passed" == true ]]; then
         pass "All diagnostic checks passed!"

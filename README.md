@@ -1,75 +1,163 @@
-# Dataiku DSS VM Diagnostic Automation
+# Dataiku DSS VM Diagnostic Automation Tool
 
-This repository contains shell scripts for automating diagnostics on VMs before installing Dataiku DSS.
+This tool provides a comprehensive set of diagnostic checks to verify that a virtual machine (VM) meets the requirements for installing Dataiku DSS.
 
 ## Overview
 
-The diagnostic tool performs various checks to ensure the VM meets the requirements for Dataiku DSS installation:
+The Dataiku DSS VM Diagnostic Automation Tool is designed to verify system specifications, configurations, and prerequisites according to infrastructure requirements. It performs the following checks:
 
-- OS type/version, locale, and kernel compatibility
-- Hardware resources (CPU, memory, disk space)
-- Filesystem types, ulimits, and system settings
-- Software dependencies (Java, Python, etc.)
-- Network connectivity and port configuration
+- **OS Verification**: Checks OS type/version, kernel version, and locale settings
+- **Hardware Validation**: Verifies CPU count, memory size, and disk space requirements
+- **System Settings**: Ensures that ulimits, time synchronization, and other system settings are properly configured
+- **Software Dependencies**: Confirms the presence of required software (Java, Python, essential packages)
+- **Network Connectivity**: Validates hostname resolution, network connectivity, and port availability
 
-## Directory Structure
+## Installation
 
-```
-dss-installer/
-├── run_diagnostic.sh   # Main entry point script
-├── modules/            # Individual modules for different checks
-│   ├── check_os.sh     # OS verification module
-│   └── ... (more modules to come)
-└── config.ini          # Configuration file with thresholds and requirements
+1. Clone this repository or copy the files to your target VM
+2. Ensure the scripts have executable permissions:
+   ```bash
+   chmod +x run_diagnostic.sh
+   chmod +x modules/*.sh
+   chmod +x modules/utils/*.sh
+   ```
+
+## Configuration
+
+The tool uses a configuration file (`config.ini`) to define expected values and thresholds for various checks. Modify this file to match your specific requirements.
+
+Example configuration:
+
+```ini
+[DEFAULT]
+# Common settings for all node types
+min_root_disk_gb = 50
+min_data_disk_gb = 100
+filesystem = xfs,ext4
+ulimit_files = 65536
+ulimit_processes = 65536
+locale_required = en_US.utf8
+allowed_os_distros = RHEL,CentOS,AlmaLinux,Rocky Linux,Ubuntu
+allowed_os_versions = 8,9,20.04,22.04
+min_kernel_version = 4.18
+java_versions = OpenJDK 11,OpenJDK 17
+python_versions = 3.6,3.7,3.9,3.10
+required_packages = git,nginx,zip,unzip,acl
+required_repos = EPEL
+
+[DESIGN]
+node_type = Design
+vcpus = 16
+memory_gb = 128
+data_disk_mount = /mnt/dss_data
+port_range = 10000-10010
+
+[AUTO]
+node_type = Automation
+vcpus = 8
+memory_gb = 64
+data_disk_mount = /mnt/dss_data
+port_range = 11000-11010
 ```
 
 ## Usage
 
-1. Clone this repository to your VM
-2. Review and update the `config.ini` file if needed
-3. Make the scripts executable: `chmod +x run_diagnostic.sh modules/*.sh`
-4. Run the diagnostic: `./run_diagnostic.sh`
+To run the diagnostic tool with default settings:
 
-### Command Line Options
-
-```
-Usage: ./run_diagnostic.sh [OPTIONS]
-Run diagnostic checks for Dataiku DSS installation.
-
-Options:
-  -c, --config FILE    Path to configuration file (default: config.ini)
-  -n, --node TYPE      Node type: DESIGN, AUTO (default: DESIGN)
-  -l, --log FILE       Path to log file (default: diagnostics.log)
-  -v, --verbose        Enable verbose output
-  -h, --help           Display this help message and exit
+```bash
+./run_diagnostic.sh
 ```
 
-## Configuration
+### Command-line Options
 
-The `config.ini` file contains thresholds and requirements for different node types:
+The tool supports the following command-line options:
 
-- `[DEFAULT]` section contains common settings
-- `[DESIGN]` and `[AUTO]` sections contain node-specific settings
+- `-c, --config FILE`: Path to configuration file (default: `config.ini`)
+- `-n, --node TYPE`: Node type: DESIGN, AUTO (default: DESIGN)
+- `-l, --log FILE`: Path to log file (default: `diagnostics.log`)
+- `-v, --verbose`: Enable verbose output
+- `--auto-fix`: Attempt to automatically fix non-sensitive issues
+- `-h, --help`: Display help message and exit
 
-You can modify parameters according to your specific requirements.
+### Examples
 
-## Output
+Run diagnostics for a design node using the default configuration:
+```bash
+./run_diagnostic.sh
+```
 
-The diagnostic tool produces:
+Run diagnostics for an automation node with verbose output:
+```bash
+./run_diagnostic.sh -n AUTO -v
+```
 
-1. Real-time console output with clear PASS/FAIL for each check
-2. A detailed log file (`diagnostics.log`) with timestamps
-3. A summary at the end showing overall success or failure
+Run diagnostics with a custom configuration file:
+```bash
+./run_diagnostic.sh -c custom_config.ini
+```
 
-## Development
+Run diagnostics with automatic fixes for non-sensitive issues:
+```bash
+./run_diagnostic.sh --auto-fix
+```
 
-### Adding New Modules
+## Auto-Fix Feature
 
-1. Create a new module file in the `modules/` directory
-2. Implement the required check functions
-3. Add a main function to run all the checks in the module
-4. Update `run_diagnostic.sh` to source and execute the new module
+The tool includes an auto-fix feature that can automatically remediate some common issues:
 
-## License
+- **Locale Settings**: Can install and configure the required locale
+- **Missing Packages**: Can install required packages using the appropriate package manager
+- **Time Synchronization**: Can install and configure time synchronization services
+- **Repository Configuration**: Can configure required repositories (e.g., EPEL)
 
-[MIT License](LICENSE) 
+To enable the auto-fix feature, use the `--auto-fix` flag:
+
+```bash
+./run_diagnostic.sh --auto-fix
+```
+
+### Limitations of Auto-Fix
+
+The auto-fix feature is limited to non-sensitive issues. It **cannot** automatically fix:
+
+- Hardware-related issues (CPU, memory, disk space)
+- Network connectivity problems
+- Port conflicts
+- Core software dependencies like Java versions
+
+These issues require manual intervention.
+
+> **Note**: The auto-fix feature requires sudo privileges to make system-level changes. Make sure the user running the script has appropriate permissions.
+
+## Project Structure
+
+```
+dss-installer/
+├── modules/
+│   ├── auto_fix.sh           # Auto-fix functions for common issues
+│   ├── check_hardware.sh     # Hardware verification checks
+│   ├── check_limits.sh       # System settings and limits checks
+│   ├── check_network.sh      # Network and connectivity checks
+│   ├── check_os.sh           # OS verification checks
+│   ├── check_software.sh     # Software and dependency checks
+│   └── utils/
+│       └── common.sh         # Common utility functions
+├── config.ini                # Configuration file
+├── diagnostics.log           # Log file (created on run)
+├── README.md                 # This documentation
+└── run_diagnostic.sh         # Main script
+```
+
+## Logs
+
+The tool creates a detailed log file (`diagnostics.log` by default) with information about each check performed, including pass/fail status and recommendations for fixing issues. The log file is useful for troubleshooting and provides a record of the diagnostic run.
+
+## Requirements
+
+- Bash shell
+- Standard POSIX tools (grep, awk, sed, etc.)
+- Sudo privileges (for auto-fix feature)
+
+## Contributing
+
+Contributions to this project are welcome. Please ensure that all scripts are written in portable bash, adhere to POSIX standards, and are tested on the supported Linux distributions. 
