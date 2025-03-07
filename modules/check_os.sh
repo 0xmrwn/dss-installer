@@ -106,7 +106,7 @@ check_kernel_version() {
     # Check minimum kernel version if specified
     if [[ -n "$min_kernel_version" ]]; then
         # Basic version comparison (doesn't handle complex version schemes)
-        if [[ "$(printf '%s\n' "$min_kernel_version" "$kernel_version" | sort -V | head -n1)" != "$min_kernel_version" ]]; then
+        if [[ "$(printf '%s\n' "$min_kernel_version" "$kernel_version" | sort -V | head -n1)" == "$min_kernel_version" ]]; then
             echo -e "${GREEN}[PASS] Kernel version check passed ($kernel_version >= $min_kernel_version).${NC}"
             echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Kernel version check passed ($kernel_version >= $min_kernel_version)." >> "$LOG_FILE"
         else
@@ -135,8 +135,10 @@ check_locale() {
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Current locale: $current_locale" >> "$LOG_FILE"
         
         # Normalize locale strings for comparison (remove case sensitivity and standardize format)
-        local norm_current=$(echo "$current_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
-        local norm_required=$(echo "$required_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
+        local norm_current
+        norm_current=$(echo "$current_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
+        local norm_required
+        norm_required=$(echo "$required_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
         
         # Check if required locale is available
         if locale -a | grep -qi "$required_locale"; then
