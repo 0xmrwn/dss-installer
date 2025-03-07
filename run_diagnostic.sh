@@ -188,6 +188,14 @@ main() {
     local filesystem
     filesystem=$(read_ini "$NODE_TYPE" "filesystem")
     
+    # Read system limits check parameters from config file
+    local ulimit_files
+    ulimit_files=$(read_ini "$NODE_TYPE" "ulimit_files")
+    local ulimit_processes
+    ulimit_processes=$(read_ini "$NODE_TYPE" "ulimit_processes")
+    local port_range
+    port_range=$(read_ini "$NODE_TYPE" "port_range")
+    
     # Print diagnostic parameters if verbose
     if [[ "$VERBOSE" == true ]]; then
         echo "Configuration Parameters:"
@@ -201,6 +209,9 @@ main() {
         echo "  - Data Disk Mount: $data_disk_mount"
         echo "  - Min Data Disk (GB): $min_data_disk_gb"
         echo "  - Allowed Filesystem: $filesystem"
+        echo "  - Required Open Files Limit: $ulimit_files"
+        echo "  - Required User Processes Limit: $ulimit_processes"
+        echo "  - Port Range to Check: $port_range"
         echo ""
     fi
     
@@ -240,11 +251,29 @@ main() {
         all_checks_passed=false
     fi
     
+    # Run system limits checks
+    if [[ -f "${SCRIPT_DIR}/modules/check_limits.sh" ]]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running system limits checks" >> "$LOG_FILE"
+        
+        # Source the module to access its functions
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/modules/check_limits.sh"
+        
+        # Run system limits checks with parameters from config
+        if ! run_limits_checks "$ulimit_files" "$ulimit_processes" "$port_range"; then
+            all_checks_passed=false
+        fi
+    else
+        echo -e "${RED}Error: System limits check module not found at ${SCRIPT_DIR}/modules/check_limits.sh${NC}"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: System limits check module not found" >> "$LOG_FILE"
+        all_checks_passed=false
+    fi
+    
     # Add additional modules here as they're developed
     # For example:
-    # if [[ -f "${SCRIPT_DIR}/modules/check_limits.sh" ]]; then
-    #     source "${SCRIPT_DIR}/modules/check_limits.sh"
-    #     if ! run_limits_checks; then
+    # if [[ -f "${SCRIPT_DIR}/modules/check_software.sh" ]]; then
+    #     source "${SCRIPT_DIR}/modules/check_software.sh"
+    #     if ! run_software_checks; then
     #         all_checks_passed=false
     #     fi
     # fi
