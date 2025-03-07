@@ -5,62 +5,43 @@
 # Exit on error, treat unset variables as errors
 set -eu
 
-# Source common utility functions if they exist
-if [[ -f "$(dirname "$0")/utils/common.sh" ]]; then
+# Source common utility functions using the exported SCRIPT_DIR
+if [[ -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
     # shellcheck disable=SC1091
-    source "$(dirname "$0")/utils/common.sh"
+    source "${SCRIPT_DIR}/modules/utils/common.sh"
+else
+    echo "Error: Common utilities not found at ${SCRIPT_DIR}/modules/utils/common.sh"
+    exit 1
 fi
-
-# Log file path (can be overridden by the main script)
-LOG_FILE=${LOG_FILE:-"diagnostics.log"}
-
-# ANSI color codes for output formatting
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 # Function to check Java installation
 check_java() {
     local required_versions="${1:-OpenJDK 11,OpenJDK 17}"
     
-    echo "[INFO] Checking Java installation..."
+    info "Checking Java installation..."
     
     # Check if java is installed and get version
     if command -v java &>/dev/null; then
         java_version=$(java -version 2>&1 | head -n 1)
-        echo "[INFO] Detected Java: $java_version"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected Java: $java_version" >> "$LOG_FILE"
+        info "Detected Java: $java_version"
         
         # Check if Java version is in the allowed list
         if [[ -n "$required_versions" ]]; then
-            allowed=false
-            for version in $(echo "$required_versions" | tr ',' ' '); do
-                if [[ "$java_version" == *"$version"* ]]; then
-                    allowed=true
-                    break
-                fi
-            done
-            
-            if [[ "$allowed" == true ]]; then
-                echo -e "${GREEN}[PASS] Java version check passed.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Java version check passed." >> "$LOG_FILE"
+            if value_in_list "$java_version" "$required_versions"; then
+                pass "Java version check passed."
                 return 0
             else
-                echo -e "${RED}[FAIL] Java version check failed.${NC}"
-                echo -e "${YELLOW}Required Java versions: $required_versions${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Java version check failed. Required: $required_versions" >> "$LOG_FILE"
+                fail "Java version check failed."
+                suggest "Required Java versions: $required_versions"
                 return 1
             fi
         else
-            echo -e "${GREEN}[PASS] Java is installed.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Java is installed." >> "$LOG_FILE"
+            pass "Java is installed."
             return 0
         fi
     else
-        echo -e "${RED}[FAIL] Java is not installed.${NC}"
-        echo -e "${YELLOW}Please install one of: $required_versions${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Java is not installed." >> "$LOG_FILE"
+        fail "Java is not installed."
+        suggest "Please install one of: $required_versions"
         return 1
     fi
 }
@@ -69,7 +50,7 @@ check_java() {
 check_python() {
     local required_versions="${1:-3.6,3.7,3.9,3.10}"
     
-    echo "[INFO] Checking Python installation..."
+    info "Checking Python installation..."
     
     # Check if python3 is installed and get version
     if command -v python3 &>/dev/null; then
@@ -77,8 +58,7 @@ check_python() {
         python_major=$(echo "$python_version" | cut -d. -f1)
         python_minor=$(echo "$python_version" | cut -d. -f2)
         
-        echo "[INFO] Detected Python: $python_version"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected Python: $python_version" >> "$LOG_FILE"
+        info "Detected Python: $python_version"
         
         # Check if Python version is in the allowed list
         if [[ -n "$required_versions" ]]; then
@@ -101,24 +81,20 @@ check_python() {
             done
             
             if [[ "$allowed" == true ]]; then
-                echo -e "${GREEN}[PASS] Python version check passed.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Python version check passed." >> "$LOG_FILE"
+                pass "Python version check passed."
                 return 0
             else
-                echo -e "${RED}[FAIL] Python version check failed.${NC}"
-                echo -e "${YELLOW}Required Python versions: $required_versions${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Python version check failed. Required: $required_versions" >> "$LOG_FILE"
+                fail "Python version check failed."
+                suggest "Required Python versions: $required_versions"
                 return 1
             fi
         else
-            echo -e "${GREEN}[PASS] Python is installed.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Python is installed." >> "$LOG_FILE"
+            pass "Python is installed."
             return 0
         fi
     else
-        echo -e "${RED}[FAIL] Python 3 is not installed.${NC}"
-        echo -e "${YELLOW}Please install one of these Python versions: $required_versions${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Python 3 is not installed." >> "$LOG_FILE"
+        fail "Python 3 is not installed."
+        suggest "Please install one of these Python versions: $required_versions"
         return 1
     fi
 }
@@ -128,7 +104,7 @@ check_packages() {
     local required_packages="${1:-git,nginx,zip,unzip,acl}"
     local package_manager=""
     
-    echo "[INFO] Checking essential packages..."
+    info "Checking essential packages..."
     
     # Determine package manager
     if command -v apt-get &>/dev/null; then
@@ -138,8 +114,7 @@ check_packages() {
     elif command -v dnf &>/dev/null; then
         package_manager="dnf"
     else
-        echo -e "${YELLOW}[WARNING] Could not determine package manager. Skipping detailed package check.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: Could not determine package manager." >> "$LOG_FILE"
+        warning "Could not determine package manager. Skipping detailed package check."
         
         # Basic check without package manager
         missing_packages=""
@@ -150,19 +125,16 @@ check_packages() {
         done
         
         if [[ -n "$missing_packages" ]]; then
-            echo -e "${RED}[FAIL] Some required packages may be missing:$missing_packages${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Some required packages may be missing:$missing_packages" >> "$LOG_FILE"
+            fail "Some required packages may be missing:$missing_packages"
             return 1
         else
-            echo -e "${GREEN}[PASS] Basic package check passed.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Basic package check passed." >> "$LOG_FILE"
+            pass "Basic package check passed."
             return 0
         fi
     fi
     
     # Check packages based on package manager
-    echo "[INFO] Using $package_manager package manager"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Using $package_manager package manager" >> "$LOG_FILE"
+    info "Using $package_manager package manager"
     
     missing_packages=""
     for pkg in $(echo "$required_packages" | tr ',' ' '); do
@@ -187,25 +159,23 @@ check_packages() {
     done
     
     if [[ -n "$missing_packages" ]]; then
-        echo -e "${RED}[FAIL] The following packages are missing:$missing_packages${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: The following packages are missing:$missing_packages" >> "$LOG_FILE"
+        fail "The following packages are missing:$missing_packages"
         
         case $package_manager in
             apt)
-                echo -e "${YELLOW}Install with: sudo apt-get install$missing_packages${NC}"
+                suggest "Install with: sudo apt-get install$missing_packages"
                 ;;
             yum)
-                echo -e "${YELLOW}Install with: sudo yum install$missing_packages${NC}"
+                suggest "Install with: sudo yum install$missing_packages"
                 ;;
             dnf)
-                echo -e "${YELLOW}Install with: sudo dnf install$missing_packages${NC}"
+                suggest "Install with: sudo dnf install$missing_packages"
                 ;;
         esac
         
         return 1
     else
-        echo -e "${GREEN}[PASS] All required packages are installed.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: All required packages are installed." >> "$LOG_FILE"
+        pass "All required packages are installed."
         return 0
     fi
 }
@@ -215,7 +185,7 @@ check_repository_access() {
     local required_repos="${1:-EPEL}"
     local package_manager=""
     
-    echo "[INFO] Checking repository access..."
+    info "Checking repository access..."
     
     # Determine package manager
     if command -v apt-get &>/dev/null; then
@@ -225,8 +195,7 @@ check_repository_access() {
     elif command -v dnf &>/dev/null; then
         package_manager="dnf"
     else
-        echo -e "${YELLOW}[WARNING] Could not determine package manager. Skipping repository check.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: Could not determine package manager. Skipping repository check." >> "$LOG_FILE"
+        warning "Could not determine package manager. Skipping repository check."
         return 0
     fi
     
@@ -238,14 +207,12 @@ check_repository_access() {
             # For Debian/Ubuntu, check sources.list files
             if [[ "$required_repos" == *"EPEL"* ]]; then
                 # EPEL is not relevant for apt-based systems
-                echo "[INFO] EPEL is not required for Debian/Ubuntu-based systems."
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - INFO: EPEL is not required for Debian/Ubuntu-based systems." >> "$LOG_FILE"
+                info "EPEL is not required for Debian/Ubuntu-based systems."
             fi
             
             # Check if apt update works (basic repository connectivity)
             if ! apt-get update -qq &>/dev/null; then
-                echo -e "${RED}[FAIL] Repository connectivity check failed.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Repository connectivity check failed." >> "$LOG_FILE"
+                fail "Repository connectivity check failed."
                 return 1
             fi
             ;;
@@ -261,24 +228,22 @@ check_repository_access() {
     esac
     
     if [[ -n "$missing_repos" ]]; then
-        echo -e "${RED}[FAIL] The following repositories are missing:$missing_repos${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: The following repositories are missing:$missing_repos" >> "$LOG_FILE"
+        fail "The following repositories are missing:$missing_repos"
         
         if [[ "$missing_repos" == *"EPEL"* ]]; then
             case $package_manager in
                 yum)
-                    echo -e "${YELLOW}Install EPEL with: sudo yum install epel-release${NC}"
+                    suggest "Install EPEL with: sudo yum install epel-release"
                     ;;
                 dnf)
-                    echo -e "${YELLOW}Install EPEL with: sudo dnf install epel-release${NC}"
+                    suggest "Install EPEL with: sudo dnf install epel-release"
                     ;;
             esac
         fi
         
         return 1
     else
-        echo -e "${GREEN}[PASS] All required repositories are configured.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: All required repositories are configured." >> "$LOG_FILE"
+        pass "All required repositories are configured."
         return 0
     fi
 }
@@ -291,10 +256,7 @@ run_software_checks() {
     local required_repos="${4:-EPEL}"
     local software_check_passed=true
     
-    echo "==============================================="
-    echo "Running Software and Dependency Checks"
-    echo "==============================================="
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Starting software and dependency checks" >> "$LOG_FILE"
+    section_header "Running Software and Dependency Checks"
     
     # Run Java check
     if ! check_java "$java_versions"; then
@@ -322,16 +284,8 @@ run_software_checks() {
         software_check_passed=false
     fi
     
-    echo ""
-    echo "==============================================="
+    # Return final result
+    section_footer "$([[ "$software_check_passed" == true ]] && echo 0 || echo 1)" "Software and dependency checks"
     
-    if [[ "$software_check_passed" == true ]]; then
-        echo -e "${GREEN}Software and dependency checks completed successfully.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Software and dependency checks completed successfully." >> "$LOG_FILE"
-        return 0
-    else
-        echo -e "${RED}Software and dependency checks failed. Please address the issues above.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Software and dependency checks failed." >> "$LOG_FILE"
-        return 1
-    fi
+    return "$([[ "$software_check_passed" == true ]] && echo 0 || echo 1)"
 } 

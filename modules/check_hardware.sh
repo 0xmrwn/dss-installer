@@ -5,26 +5,20 @@
 # Exit on error, treat unset variables as errors
 set -eu
 
-# Source common utility functions if they exist
-if [[ -f "$(dirname "$0")/utils/common.sh" ]]; then
+# Source common utility functions using the exported SCRIPT_DIR
+if [[ -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
     # shellcheck disable=SC1091
-    source "$(dirname "$0")/utils/common.sh"
+    source "${SCRIPT_DIR}/modules/utils/common.sh"
+else
+    echo "Error: Common utilities not found at ${SCRIPT_DIR}/modules/utils/common.sh"
+    exit 1
 fi
-
-# Log file path (can be overridden by the main script)
-LOG_FILE=${LOG_FILE:-"diagnostics.log"}
-
-# ANSI color codes for output formatting
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
 # Function to check CPU count
 check_cpu_count() {
     local required_cpus="${1:-}"
     
-    echo "[INFO] Checking CPU count..."
+    info "Checking CPU count..."
     
     # Get CPU count using nproc if available, otherwise parse /proc/cpuinfo
     if command -v nproc &>/dev/null; then
@@ -33,23 +27,19 @@ check_cpu_count() {
         cpu_count=$(grep -c "^processor" /proc/cpuinfo)
     fi
     
-    echo "[INFO] Detected CPUs: $cpu_count"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected CPUs: $cpu_count" >> "$LOG_FILE"
+    info "Detected CPUs: $cpu_count"
     
     # Check if CPU count meets requirements
     if [[ -n "$required_cpus" ]]; then
         if [[ "$cpu_count" -ge "$required_cpus" ]]; then
-            echo -e "${GREEN}[PASS] CPU count check passed ($cpu_count >= $required_cpus).${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: CPU count check passed ($cpu_count >= $required_cpus)." >> "$LOG_FILE"
+            pass "CPU count check passed ($cpu_count >= $required_cpus)."
             return 0
         else
-            echo -e "${RED}[FAIL] CPU count check failed. Found $cpu_count, required $required_cpus.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: CPU count check failed. Found $cpu_count, required $required_cpus." >> "$LOG_FILE"
+            fail "CPU count check failed. Found $cpu_count, required $required_cpus."
             return 1
         fi
     else
-        echo -e "${YELLOW}[WARNING] No required CPU count specified. Skipping check.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: No required CPU count specified. Skipping check." >> "$LOG_FILE"
+        warning "No required CPU count specified. Skipping check."
         return 0
     fi
 }
@@ -58,7 +48,7 @@ check_cpu_count() {
 check_memory() {
     local required_memory_gb="${1:-}"
     
-    echo "[INFO] Checking memory size..."
+    info "Checking memory size..."
     
     # Get memory size from /proc/meminfo
     if [[ -f /proc/meminfo ]]; then
@@ -66,29 +56,24 @@ check_memory() {
         mem_kb=$(grep "MemTotal:" /proc/meminfo | awk '{print $2}')
         mem_gb=$(awk "BEGIN {printf \"%.1f\", $mem_kb/1024/1024}")
         
-        echo "[INFO] Detected memory: $mem_gb GB"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected memory: $mem_gb GB" >> "$LOG_FILE"
+        info "Detected memory: $mem_gb GB"
         
         # Check if memory meets requirements
         if [[ -n "$required_memory_gb" ]]; then
             # Use bc for floating point comparison
             if (( $(echo "$mem_gb >= $required_memory_gb" | bc -l) )); then
-                echo -e "${GREEN}[PASS] Memory size check passed ($mem_gb GB >= $required_memory_gb GB).${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Memory size check passed ($mem_gb GB >= $required_memory_gb GB)." >> "$LOG_FILE"
+                pass "Memory size check passed ($mem_gb GB >= $required_memory_gb GB)."
                 return 0
             else
-                echo -e "${RED}[FAIL] Memory size check failed. Found $mem_gb GB, required $required_memory_gb GB.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Memory size check failed. Found $mem_gb GB, required $required_memory_gb GB." >> "$LOG_FILE"
+                fail "Memory size check failed. Found $mem_gb GB, required $required_memory_gb GB."
                 return 1
             fi
         else
-            echo -e "${YELLOW}[WARNING] No required memory size specified. Skipping check.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: No required memory size specified. Skipping check." >> "$LOG_FILE"
+            warning "No required memory size specified. Skipping check."
             return 0
         fi
     else
-        echo -e "${RED}[FAIL] Cannot determine memory size (/proc/meminfo not found).${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Cannot determine memory size (/proc/meminfo not found)." >> "$LOG_FILE"
+        fail "Cannot determine memory size (/proc/meminfo not found)."
         return 1
     fi
 }
@@ -97,7 +82,7 @@ check_memory() {
 check_root_disk() {
     local min_root_disk_gb="${1:-}"
     
-    echo "[INFO] Checking root disk space..."
+    info "Checking root disk space..."
     
     # Get root disk space using df
     if command -v df &>/dev/null; then
@@ -105,29 +90,24 @@ check_root_disk() {
         root_disk_kb=$(df -k / | awk 'NR==2 {print $2}')
         root_disk_gb=$(awk "BEGIN {printf \"%.1f\", $root_disk_kb/1024/1024}")
         
-        echo "[INFO] Detected root disk space: $root_disk_gb GB"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected root disk space: $root_disk_gb GB" >> "$LOG_FILE"
+        info "Detected root disk space: $root_disk_gb GB"
         
         # Check if root disk meets requirements
         if [[ -n "$min_root_disk_gb" ]]; then
             # Use bc for floating point comparison
             if (( $(echo "$root_disk_gb >= $min_root_disk_gb" | bc -l) )); then
-                echo -e "${GREEN}[PASS] Root disk space check passed ($root_disk_gb GB >= $min_root_disk_gb GB).${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Root disk space check passed ($root_disk_gb GB >= $min_root_disk_gb GB)." >> "$LOG_FILE"
+                pass "Root disk space check passed ($root_disk_gb GB >= $min_root_disk_gb GB)."
                 return 0
             else
-                echo -e "${RED}[FAIL] Root disk space check failed. Found $root_disk_gb GB, required $min_root_disk_gb GB.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Root disk space check failed. Found $root_disk_gb GB, required $min_root_disk_gb GB." >> "$LOG_FILE"
+                fail "Root disk space check failed. Found $root_disk_gb GB, required $min_root_disk_gb GB."
                 return 1
             fi
         else
-            echo -e "${YELLOW}[WARNING] No minimum root disk space specified. Skipping check.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: No minimum root disk space specified. Skipping check." >> "$LOG_FILE"
+            warning "No minimum root disk space specified. Skipping check."
             return 0
         fi
     else
-        echo -e "${RED}[FAIL] Cannot determine disk space (df command not found).${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Cannot determine disk space (df command not found)." >> "$LOG_FILE"
+        fail "Cannot determine disk space (df command not found)."
         return 1
     fi
 }
@@ -138,18 +118,16 @@ check_data_disk() {
     local min_data_disk_gb="${2:-}"
     local allowed_filesystems="${3:-ext4,xfs}"
     
-    echo "[INFO] Checking data disk space and filesystem type..."
+    info "Checking data disk space and filesystem type..."
     
     # First check if mount point exists
     if [[ -z "$mount_point" ]]; then
-        echo -e "${YELLOW}[WARNING] No data disk mount point specified. Skipping check.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: No data disk mount point specified. Skipping check." >> "$LOG_FILE"
+        warning "No data disk mount point specified. Skipping check."
         return 0
     fi
     
     if [[ ! -d "$mount_point" ]]; then
-        echo -e "${RED}[FAIL] Data disk mount point $mount_point does not exist.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Data disk mount point $mount_point does not exist." >> "$LOG_FILE"
+        fail "Data disk mount point $mount_point does not exist."
         return 1
     fi
     
@@ -157,8 +135,7 @@ check_data_disk() {
     if command -v df &>/dev/null; then
         # Check if mount point is actually mounted
         if ! df -T "$mount_point" 2>/dev/null | grep -q "$mount_point"; then
-            echo -e "${RED}[FAIL] Data disk at $mount_point is not mounted.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Data disk at $mount_point is not mounted." >> "$LOG_FILE"
+            fail "Data disk at $mount_point is not mounted."
             return 1
         fi
         
@@ -169,29 +146,17 @@ check_data_disk() {
         # Get filesystem type
         fs_type=$(df -T "$mount_point" | awk 'NR==2 {print $2}')
         
-        echo "[INFO] Detected data disk space: $data_disk_gb GB"
-        echo "[INFO] Detected filesystem type: $fs_type"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected data disk space: $data_disk_gb GB" >> "$LOG_FILE"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Detected filesystem type: $fs_type" >> "$LOG_FILE"
+        info "Detected data disk space: $data_disk_gb GB"
+        info "Detected filesystem type: $fs_type"
         
         # Check filesystem type
         if [[ -n "$allowed_filesystems" ]]; then
-            allowed=false
-            for fs in $(echo "$allowed_filesystems" | tr ',' ' '); do
-                if [[ "$fs_type" == "$fs" ]]; then
-                    allowed=true
-                    break
-                fi
-            done
-            
-            if [[ "$allowed" == false ]]; then
-                echo -e "${RED}[FAIL] Filesystem type $fs_type is not supported.${NC}"
-                echo -e "${YELLOW}Supported filesystems: $allowed_filesystems ${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Filesystem type $fs_type is not supported. Supported: $allowed_filesystems" >> "$LOG_FILE"
-                return 1
+            if value_in_list "$fs_type" "$allowed_filesystems"; then
+                pass "Filesystem type check passed ($fs_type)."
             else
-                echo -e "${GREEN}[PASS] Filesystem type check passed ($fs_type).${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Filesystem type check passed ($fs_type)." >> "$LOG_FILE"
+                fail "Filesystem type $fs_type is not supported."
+                suggest "Supported filesystems: $allowed_filesystems"
+                return 1
             fi
         fi
         
@@ -199,22 +164,18 @@ check_data_disk() {
         if [[ -n "$min_data_disk_gb" ]]; then
             # Use bc for floating point comparison
             if (( $(echo "$data_disk_gb >= $min_data_disk_gb" | bc -l) )); then
-                echo -e "${GREEN}[PASS] Data disk space check passed ($data_disk_gb GB >= $min_data_disk_gb GB).${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Data disk space check passed ($data_disk_gb GB >= $min_data_disk_gb GB)." >> "$LOG_FILE"
+                pass "Data disk space check passed ($data_disk_gb GB >= $min_data_disk_gb GB)."
                 return 0
             else
-                echo -e "${RED}[FAIL] Data disk space check failed. Found $data_disk_gb GB, required $min_data_disk_gb GB.${NC}"
-                echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Data disk space check failed. Found $data_disk_gb GB, required $min_data_disk_gb GB." >> "$LOG_FILE"
+                fail "Data disk space check failed. Found $data_disk_gb GB, required $min_data_disk_gb GB."
                 return 1
             fi
         else
-            echo -e "${YELLOW}[WARNING] No minimum data disk space specified. Skipping size check.${NC}"
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - WARNING: No minimum data disk space specified. Skipping size check." >> "$LOG_FILE"
+            warning "No minimum data disk space specified. Skipping size check."
             return 0
         fi
     else
-        echo -e "${RED}[FAIL] Cannot determine disk space (df command not found).${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Cannot determine disk space (df command not found)." >> "$LOG_FILE"
+        fail "Cannot determine disk space (df command not found)."
         return 1
     fi
 }
@@ -229,10 +190,7 @@ run_hardware_checks() {
     local allowed_filesystems="${6:-ext4,xfs}"
     local hardware_check_passed=true
     
-    echo "==============================================="
-    echo "Running Hardware Checks"
-    echo "==============================================="
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Starting hardware checks" >> "$LOG_FILE"
+    section_header "Running Hardware Checks"
     
     # Run CPU count check
     if ! check_cpu_count "$required_cpus"; then
@@ -260,16 +218,8 @@ run_hardware_checks() {
         hardware_check_passed=false
     fi
     
-    echo ""
-    echo "==============================================="
+    # Return final result
+    section_footer "$([[ "$hardware_check_passed" == true ]] && echo 0 || echo 1)" "Hardware checks"
     
-    if [[ "$hardware_check_passed" == true ]]; then
-        echo -e "${GREEN}Hardware checks completed successfully.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Hardware checks completed successfully." >> "$LOG_FILE"
-        return 0
-    else
-        echo -e "${RED}Hardware checks failed. Please address the issues above.${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Hardware checks failed." >> "$LOG_FILE"
-        return 1
-    fi
+    return "$([[ "$hardware_check_passed" == true ]] && echo 0 || echo 1)"
 } 

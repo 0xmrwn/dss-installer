@@ -5,8 +5,14 @@
 # Exit on error, treat unset variables as errors
 set -eu
 
-# Script directory
+# Script directory - export so modules can use it
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SCRIPT_DIR
+
+# Create modules/utils directory if it doesn't exist
+if [[ ! -d "${SCRIPT_DIR}/modules/utils" ]]; then
+    mkdir -p "${SCRIPT_DIR}/modules/utils"
+fi
 
 # Default values
 CONFIG_FILE="${SCRIPT_DIR}/config.ini"
@@ -14,15 +20,16 @@ LOG_FILE="${SCRIPT_DIR}/diagnostics.log"
 NODE_TYPE="DESIGN"
 VERBOSE=false
 
-# ANSI color codes for output formatting
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Check for common utilities using absolute path
+if [[ ! -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
+    echo "Error: Common utilities file not found at ${SCRIPT_DIR}/modules/utils/common.sh"
+    echo "Please ensure the file exists before running this script."
+    exit 1
+fi
 
-# Export colors for use in modules
-export GREEN RED YELLOW BLUE NC
+# Source common utility functions with absolute path
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/modules/utils/common.sh"
 
 # Function to display usage information
 usage() {
@@ -231,7 +238,7 @@ main() {
     
     # Run OS checks
     if [[ -f "${SCRIPT_DIR}/modules/check_os.sh" ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running OS checks" >> "$LOG_FILE"
+        log_message "Running OS checks"
         
         # Source the module to access its functions
         # shellcheck disable=SC1091
@@ -242,14 +249,14 @@ main() {
             all_checks_passed=false
         fi
     else
-        echo -e "${RED}Error: OS check module not found at ${SCRIPT_DIR}/modules/check_os.sh${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: OS check module not found" >> "$LOG_FILE"
+        fail "OS check module not found at ${SCRIPT_DIR}/modules/check_os.sh"
+        log_message "Error: OS check module not found"
         all_checks_passed=false
     fi
     
     # Run hardware checks
     if [[ -f "${SCRIPT_DIR}/modules/check_hardware.sh" ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running hardware checks" >> "$LOG_FILE"
+        log_message "Running hardware checks"
         
         # Source the module to access its functions
         # shellcheck disable=SC1091
@@ -260,14 +267,14 @@ main() {
             all_checks_passed=false
         fi
     else
-        echo -e "${RED}Error: Hardware check module not found at ${SCRIPT_DIR}/modules/check_hardware.sh${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Hardware check module not found" >> "$LOG_FILE"
+        fail "Hardware check module not found at ${SCRIPT_DIR}/modules/check_hardware.sh"
+        log_message "Error: Hardware check module not found"
         all_checks_passed=false
     fi
     
     # Run system limits checks
     if [[ -f "${SCRIPT_DIR}/modules/check_limits.sh" ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running system limits checks" >> "$LOG_FILE"
+        log_message "Running system limits checks"
         
         # Source the module to access its functions
         # shellcheck disable=SC1091
@@ -278,14 +285,14 @@ main() {
             all_checks_passed=false
         fi
     else
-        echo -e "${RED}Error: System limits check module not found at ${SCRIPT_DIR}/modules/check_limits.sh${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: System limits check module not found" >> "$LOG_FILE"
+        fail "System limits check module not found at ${SCRIPT_DIR}/modules/check_limits.sh"
+        log_message "Error: System limits check module not found"
         all_checks_passed=false
     fi
     
     # Run network and connectivity checks
     if [[ -f "${SCRIPT_DIR}/modules/check_network.sh" ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running network and connectivity checks" >> "$LOG_FILE"
+        log_message "Running network and connectivity checks"
         
         # Source the module to access its functions
         # shellcheck disable=SC1091
@@ -296,14 +303,14 @@ main() {
             all_checks_passed=false
         fi
     else
-        echo -e "${RED}Error: Network check module not found at ${SCRIPT_DIR}/modules/check_network.sh${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Network check module not found" >> "$LOG_FILE"
+        fail "Network check module not found at ${SCRIPT_DIR}/modules/check_network.sh"
+        log_message "Error: Network check module not found"
         all_checks_passed=false
     fi
     
     # Run software and dependency checks
     if [[ -f "${SCRIPT_DIR}/modules/check_software.sh" ]]; then
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running software and dependency checks" >> "$LOG_FILE"
+        log_message "Running software and dependency checks"
         
         # Source the module to access its functions
         # shellcheck disable=SC1091
@@ -314,8 +321,8 @@ main() {
             all_checks_passed=false
         fi
     else
-        echo -e "${RED}Error: Software check module not found at ${SCRIPT_DIR}/modules/check_software.sh${NC}"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Software check module not found" >> "$LOG_FILE"
+        fail "Software check module not found at ${SCRIPT_DIR}/modules/check_software.sh"
+        log_message "Error: Software check module not found"
         all_checks_passed=false
     fi
     
@@ -326,15 +333,15 @@ main() {
     echo "====================================================="
     
     if [[ "$all_checks_passed" == true ]]; then
-        echo -e "${GREEN}All diagnostic checks passed!${NC}"
+        pass "All diagnostic checks passed!"
         echo "The VM meets all requirements for Dataiku DSS installation."
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - All diagnostic checks passed" >> "$LOG_FILE"
+        log_message "All diagnostic checks passed"
         exit 0
     else
-        echo -e "${RED}Some diagnostic checks failed.${NC}"
+        fail "Some diagnostic checks failed."
         echo "Please review the logs above and fix the issues before proceeding with installation."
         echo "Full logs are available at: $LOG_FILE"
-        echo "$(date '+%Y-%m-%d %H:%M:%S') - Some diagnostic checks failed" >> "$LOG_FILE"
+        log_message "Some diagnostic checks failed"
         exit 1
     fi
 }
