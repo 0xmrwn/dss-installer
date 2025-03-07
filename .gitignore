@@ -1,0 +1,10 @@
+# Logs
+**/*.log
+
+# IDE files
+.cursor/
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
