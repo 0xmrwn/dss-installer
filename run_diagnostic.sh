@@ -157,30 +157,28 @@ init_log() {
 # Function to display banner
 show_banner() {
     echo ""
-    echo -e "${BRIGHT_BLUE}╔═════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_BLUE}║${NC} ${BRIGHT_WHITE}${BOLD}             DATAIKU DSS VM DIAGNOSTIC TOOL                ${NC}${BRIGHT_BLUE}║${NC}"
-    echo -e "${BRIGHT_BLUE}╚═════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BRIGHT_BLUE}${BOLD}DATAIKU DSS VM DIAGNOSTIC TOOL${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
     echo ""
-    echo -e "${BRIGHT_WHITE}${BOLD}ENVIRONMENT CONFIGURATION${NC}"
-    echo -e "${GRAY}┌─────────────────────────────────────────────────────────────────┐${NC}"
-    echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Node Type:      ${NC}${BLUE}${BOLD}$NODE_TYPE${NC}"
-    echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Run Timestamp:  ${NC}${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
-    echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Log Path:       ${NC}${GRAY}$LOG_FILE${NC}"
+    echo -e "${BRIGHT_WHITE}${BOLD}Environment Configuration:${NC}"
+    echo -e "${BRIGHT_WHITE}Node Type:${NC}      ${BLUE}${BOLD}$NODE_TYPE${NC}"
+    echo -e "${BRIGHT_WHITE}Run Time:${NC}       ${CYAN}$(date '+%Y-%m-%d %H:%M:%S')${NC}"
+    echo -e "${BRIGHT_WHITE}Log Path:${NC}       ${GRAY}$LOG_FILE${NC}"
     
     # Auto-fix status with colorful indicator
     if [[ "$AUTO_FIX" == true ]]; then
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Auto-Fix:       ${NC}${GREEN}${BOLD}Enabled${NC}  ${GREEN}(Will attempt to fix non-sensitive issues)${NC}"
+        echo -e "${BRIGHT_WHITE}Auto-Fix:${NC}       ${GREEN}${BOLD}Enabled${NC} ${GREEN}(Will attempt to fix non-sensitive issues)${NC}"
     else
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Auto-Fix:       ${NC}${YELLOW}Disabled${NC}"
+        echo -e "${BRIGHT_WHITE}Auto-Fix:${NC}       ${YELLOW}Disabled${NC}"
     fi
     
     # Interactive mode status
     if [[ "$NON_INTERACTIVE" == true ]]; then
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Mode:           ${NC}${BLUE}Non-Interactive${NC} ${GRAY}(No confirmations will be requested)${NC}"
+        echo -e "${BRIGHT_WHITE}Mode:${NC}           ${BLUE}Non-Interactive${NC} ${GRAY}(No confirmations will be requested)${NC}"
     else
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Mode:           ${NC}${BLUE}Interactive${NC}"
+        echo -e "${BRIGHT_WHITE}Mode:${NC}           ${BLUE}Interactive${NC}"
     fi
-    echo -e "${GRAY}└─────────────────────────────────────────────────────────────────┘${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
     echo ""
 }
 
@@ -273,33 +271,37 @@ main() {
     
     # Print diagnostic parameters if verbose
     if [[ "$VERBOSE" == true ]]; then
-        echo -e "${BRIGHT_WHITE}${BOLD}CONFIGURATION PARAMETERS${NC}"
-        echo -e "${GRAY}┌─────────────────────────────────────────────────────────────────┐${NC}"
-        echo -e "${GRAY}│${NC} ${CYAN}${BOLD}Operating System Requirements${NC}"
+        echo -e "${BRIGHT_WHITE}${BOLD}Configuration Parameters:${NC}"
+        echo -e "${GRAY}──────────────────────────────────────────${NC}"
+        
+        echo -e "${CYAN}${BOLD}Operating System Requirements:${NC}"
         show_config_property "Allowed OS Distros" "$allowed_os_distros"
         show_config_property "Allowed OS Versions" "$allowed_os_versions"
         show_config_property "Min Kernel Version" "$min_kernel_version"
         show_config_property "Required Locale" "$locale_required"
+        echo ""
         
-        echo -e "${GRAY}│${NC} ${CYAN}${BOLD}Hardware Requirements${NC}"
+        echo -e "${CYAN}${BOLD}Hardware Requirements:${NC}"
         show_config_property "Required vCPUs" "$vcpus"
         show_config_property "Required Memory (GB)" "$memory_gb"
         show_config_property "Min Root Disk (GB)" "$min_root_disk_gb"
         show_config_property "Data Disk Mount" "$data_disk_mount"
         show_config_property "Min Data Disk (GB)" "$min_data_disk_gb"
         show_config_property "Allowed Filesystem" "$filesystem"
+        echo ""
         
-        echo -e "${GRAY}│${NC} ${CYAN}${BOLD}System Limits${NC}"
+        echo -e "${CYAN}${BOLD}System Limits:${NC}"
         show_config_property "Required Open Files Limit" "$ulimit_files"
         show_config_property "Required User Processes Limit" "$ulimit_processes"
         show_config_property "Port Range to Check" "$port_range"
+        echo ""
         
-        echo -e "${GRAY}│${NC} ${CYAN}${BOLD}Software Requirements${NC}"
+        echo -e "${CYAN}${BOLD}Software Requirements:${NC}"
         show_config_property "Required Java Versions" "$java_versions"
         show_config_property "Required Python Versions" "$python_versions"
         show_config_property "Required Packages" "$required_packages"
         show_config_property "Required Repositories" "$required_repos"
-        echo -e "${GRAY}└─────────────────────────────────────────────────────────────────┘${NC}"
+        echo -e "${GRAY}──────────────────────────────────────────${NC}"
         echo ""
     fi
     
@@ -540,44 +542,36 @@ main() {
     
     # Print summary
     echo ""
-    echo -e "${BRIGHT_BLUE}╔═════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BRIGHT_BLUE}║${NC} ${BRIGHT_WHITE}${BOLD}                   DIAGNOSTIC SUMMARY                     ${NC}${BRIGHT_BLUE}║${NC}"
-    echo -e "${BRIGHT_BLUE}╚═════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
+    echo -e "${BRIGHT_BLUE}${BOLD}DIAGNOSTIC SUMMARY${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
     
     if [[ "$AUTO_FIX" == true && "$fixes_attempted" == true ]]; then
-        echo -e "${GRAY}┌─────────────────────────────────────────────────────────────────┐${NC}"
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}${BOLD}AUTO-FIX STATUS${NC}"
+        echo -e "${BRIGHT_WHITE}${BOLD}Auto-Fix Status:${NC}"
         if [[ "$fixes_succeeded" == true ]]; then
-            echo -e "${GRAY}│${NC} ${GREEN}✓ ${BRIGHT_GREEN}Some issues were successfully fixed automatically.${NC}"
+            echo -e "${GREEN}✓ ${BRIGHT_GREEN}Some issues were successfully fixed automatically.${NC}"
         else
-            echo -e "${GRAY}│${NC} ${YELLOW}⚠️  ${BRIGHT_YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
+            echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}Auto-fix was attempted but couldn't resolve all issues.${NC}"
         fi
-        echo -e "${GRAY}└─────────────────────────────────────────────────────────────────┘${NC}"
         echo ""
     fi
     
     # Display reboot notification if needed
     if [[ "$reboot_required" == true ]]; then
-        echo -e "${BG_YELLOW}${BLACK} REBOOT REQUIRED ${NC} ${BRIGHT_YELLOW}Some changes may require a system reboot.${NC}"
-        echo -e "${GRAY}  └─ ${CYAN}Consider rebooting the system before proceeding with installation.${NC}"
+        echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}REBOOT REQUIRED: Some changes may require a system reboot.${NC}"
+        echo -e "${CYAN}Consider rebooting the system before proceeding with installation.${NC}"
         echo ""
     fi
     
     if [[ "$all_checks_passed" == true ]]; then
-        echo -e "${BG_GREEN}${BLACK} SUCCESS ${NC} ${BRIGHT_GREEN}${BOLD}All diagnostic checks passed!${NC}"
+        echo -e "${GREEN}✓ ${BRIGHT_GREEN}${BOLD}All diagnostic checks passed!${NC}"
         echo -e "${GREEN}The VM meets all requirements for Dataiku DSS installation.${NC}"
         log_message "All diagnostic checks passed"
         exit 0
     else
-        echo -e "${BG_RED}${WHITE} FAILED ${NC} ${BRIGHT_RED}${BOLD}Some diagnostic checks failed.${NC}"
-        echo -e "${GRAY}┌─────────────────────────────────────────────────────────────────┐${NC}"
-        echo -e "${GRAY}│${NC} ${RED}Please review the logs above and fix the issues before${NC}"
-        echo -e "${GRAY}│${NC} ${RED}proceeding with installation.${NC}"
-        echo -e "${GRAY}│${NC}"
-        echo -e "${GRAY}│${NC} ${BRIGHT_WHITE}Full logs are available at:${NC}"
-        echo -e "${GRAY}│${NC} ${CYAN}$LOG_FILE${NC}"
-        echo -e "${GRAY}└─────────────────────────────────────────────────────────────────┘${NC}"
+        echo -e "${RED}✗ ${BRIGHT_RED}${BOLD}Some diagnostic checks failed.${NC}"
+        echo -e "${RED}Please review the logs above and fix the issues before proceeding with installation.${NC}"
+        echo ""
+        echo -e "${BRIGHT_WHITE}Full logs are available at:${NC} ${CYAN}$LOG_FILE${NC}"
         log_message "Some diagnostic checks failed"
         exit 1
     fi

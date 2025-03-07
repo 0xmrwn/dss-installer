@@ -109,9 +109,8 @@ report_check_result() {
 section_header() {
     local title="$1"
     echo ""
-    echo -e "${BLUE}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
-    echo -e "${BLUE}┃${BRIGHT_WHITE}${BOLD} ${title} ${NC}${BLUE}┃${NC}"
-    echo -e "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
+    echo -e "${BRIGHT_BLUE}${BOLD}## ${title} ##${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
     log_message "Starting $title"
 }
 
@@ -122,11 +121,11 @@ section_footer() {
     
     echo ""
     if [[ $result -eq 0 ]]; then
-        echo -e "${BG_GREEN}${BLACK} COMPLETE ${NC} ${GREEN}${BOLD}$section_name completed successfully.${NC}"
+        echo -e "${GREEN}✓ ${BRIGHT_GREEN}${BOLD}$section_name completed successfully.${NC}"
     else
-        echo -e "${BG_RED}${WHITE} FAILED ${NC} ${RED}${BOLD}$section_name failed. Please address the issues above.${NC}"
+        echo -e "${RED}✗ ${BRIGHT_RED}${BOLD}$section_name failed. Please address the issues above.${NC}"
     fi
-    echo -e "${GRAY}────────────────────────────────────────────────────────────${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
     
     if [[ $result -eq 0 ]]; then
         log_message "$section_name completed successfully."
@@ -144,22 +143,8 @@ show_progress() {
     local description="$3"
     local percentage=$((current * 100 / total))
     
-    echo -e "\n${BRIGHT_BLUE}[$current/$total]${NC} ${BLUE}${BOLD}$description${NC}"
-    
-    # Create a progress bar with 30 segments
-    local completed=$((percentage * 30 / 100))
-    local remaining=$((30 - completed))
-    
-    echo -ne "${BLUE}[${NC}"
-    # Print completed segments
-    for ((i=0; i<completed; i++)); do
-        echo -ne "${BRIGHT_BLUE}█${NC}"
-    done
-    # Print remaining segments
-    for ((i=0; i<remaining; i++)); do
-        echo -ne "${GRAY}▒${NC}"
-    done
-    echo -e "${BLUE}]${NC} ${BRIGHT_WHITE}${percentage}%${NC}\n"
+    echo -e "\n${BLUE}${BOLD}$description${NC} ${BRIGHT_BLUE}($current/$total - ${percentage}%)${NC}"
+    echo -e "${GRAY}──────────────────────────────────────────${NC}"
 }
 
 # Function to display a property value in the configuration output
@@ -167,7 +152,7 @@ show_config_property() {
     local name="$1"
     local value="$2"
     
-    echo -e "${GRAY}  │ ${BRIGHT_WHITE}$name:${NC} ${CYAN}$value${NC}"
+    echo -e "${BRIGHT_WHITE}$name:${NC} ${CYAN}$value${NC}"
 }
 
 # Function to compare versions (handles numeric version comparisons)
