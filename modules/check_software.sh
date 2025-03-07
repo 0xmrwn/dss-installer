@@ -20,6 +20,9 @@ check_java() {
     
     info "Checking Java installation..."
     
+    # Reset global variable
+    export MISSING_JAVA=false
+    
     # Check if java is installed and get version
     if command -v java &>/dev/null; then
         java_version=$(java -version 2>&1 | head -n 1)
@@ -33,6 +36,8 @@ check_java() {
             else
                 fail "Java version check failed."
                 suggest "Required Java versions: $required_versions"
+                # Set global variable for auto-fix to know Java is not of the right version
+                export MISSING_JAVA=true
                 return 1
             fi
         else
@@ -42,6 +47,8 @@ check_java() {
     else
         fail "Java is not installed."
         suggest "Please install one of: $required_versions"
+        # Set global variable for auto-fix
+        export MISSING_JAVA=true
         return 1
     fi
 }
