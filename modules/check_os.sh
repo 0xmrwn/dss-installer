@@ -134,9 +134,13 @@ check_locale() {
         echo "[INFO] Current locale: $current_locale"
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Current locale: $current_locale" >> "$LOG_FILE"
         
+        # Normalize locale strings for comparison (remove case sensitivity and standardize format)
+        local norm_current=$(echo "$current_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
+        local norm_required=$(echo "$required_locale" | tr '[:upper:]' '[:lower:]' | sed 's/utf-8/utf8/g')
+        
         # Check if required locale is available
         if locale -a | grep -qi "$required_locale"; then
-            if [[ "${current_locale,,}" == *"${required_locale,,}"* ]]; then
+            if [[ "$norm_current" == *"$norm_required"* || "$norm_required" == *"$norm_current"* ]]; then
                 echo -e "${GREEN}[PASS] Locale check passed. Current locale ($current_locale) matches required ($required_locale).${NC}"
                 echo "$(date '+%Y-%m-%d %H:%M:%S') - PASS: Locale check passed." >> "$LOG_FILE"
                 return 0
