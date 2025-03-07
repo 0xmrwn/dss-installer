@@ -274,12 +274,30 @@ main() {
         source "${SCRIPT_DIR}/modules/check_limits.sh"
         
         # Run system limits checks with parameters from config
-        if ! run_limits_checks "$ulimit_files" "$ulimit_processes" "$port_range"; then
+        if ! run_limits_checks "$ulimit_files" "$ulimit_processes"; then
             all_checks_passed=false
         fi
     else
         echo -e "${RED}Error: System limits check module not found at ${SCRIPT_DIR}/modules/check_limits.sh${NC}"
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: System limits check module not found" >> "$LOG_FILE"
+        all_checks_passed=false
+    fi
+    
+    # Run network and connectivity checks
+    if [[ -f "${SCRIPT_DIR}/modules/check_network.sh" ]]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Running network and connectivity checks" >> "$LOG_FILE"
+        
+        # Source the module to access its functions
+        # shellcheck disable=SC1091
+        source "${SCRIPT_DIR}/modules/check_network.sh"
+        
+        # Run network checks with parameters from config
+        if ! run_network_checks "$port_range"; then
+            all_checks_passed=false
+        fi
+    else
+        echo -e "${RED}Error: Network check module not found at ${SCRIPT_DIR}/modules/check_network.sh${NC}"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Error: Network check module not found" >> "$LOG_FILE"
         all_checks_passed=false
     fi
     
