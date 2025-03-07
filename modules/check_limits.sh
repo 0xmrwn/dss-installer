@@ -67,7 +67,7 @@ check_ulimits() {
         ulimit_check_passed=false
     fi
     
-    return $([[ "$ulimit_check_passed" == true ]] && echo 0 || echo 1)
+    return "$([[ "$ulimit_check_passed" == true ]] && echo 0 || echo 1)"
 }
 
 # Function to check time synchronization
@@ -142,7 +142,7 @@ check_time_sync() {
         fi
     fi
     
-    return $([[ "$time_sync_check_passed" == true ]] && echo 0 || echo 1)
+    return "$([[ "$time_sync_check_passed" == true ]] && echo 0 || echo 1)"
 }
 
 # Function to check port availability
@@ -213,7 +213,7 @@ check_ports() {
         echo "$(date '+%Y-%m-%d %H:%M:%S') - FAIL: Some ports in range $port_range are already in use: $used_ports" >> "$LOG_FILE"
     fi
     
-    return $([[ "$ports_check_passed" == true ]] && echo 0 || echo 1)
+    return "$([[ "$ports_check_passed" == true ]] && echo 0 || echo 1)"
 }
 
 # Main function to run all limit checks
