@@ -4,15 +4,42 @@
 # Exit on error, treat unset variables as errors
 set -eu
 
-# ANSI color codes for output formatting
-GREEN='\033[0;32m'
+# Enhanced ANSI color and style codes for output formatting
+BLACK='\033[0;30m'
 RED='\033[0;31m'
-YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+GRAY='\033[0;90m'
+
+# Bright colors
+BRIGHT_RED='\033[1;31m'
+BRIGHT_GREEN='\033[1;32m'
+BRIGHT_YELLOW='\033[1;33m'
+BRIGHT_BLUE='\033[1;34m'
+BRIGHT_MAGENTA='\033[1;35m'
+BRIGHT_CYAN='\033[1;36m'
+BRIGHT_WHITE='\033[1;37m'
+
+# Background colors
+BG_RED='\033[0;41m'
+BG_GREEN='\033[0;42m'
+BG_YELLOW='\033[0;43m'
+BG_BLUE='\033[0;44m'
+
+# Text styles
+BOLD='\033[1m'
+UNDERLINE='\033[4m'
 NC='\033[0m' # No Color
 
-# Export colors for use in modules
-export GREEN RED YELLOW BLUE NC
+# Export colors and styles for use in modules
+export BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE GRAY
+export BRIGHT_RED BRIGHT_GREEN BRIGHT_YELLOW BRIGHT_BLUE BRIGHT_MAGENTA BRIGHT_CYAN BRIGHT_WHITE
+export BG_RED BG_GREEN BG_YELLOW BG_BLUE
+export BOLD UNDERLINE NC
 
 # Default log file path (can be overridden by the main script)
 LOG_FILE=${LOG_FILE:-"diagnostics.log"}
@@ -28,14 +55,14 @@ log_message() {
 # Function to display an info message
 info() {
     local message="$1"
-    echo "[INFO] $message"
+    echo -e "${CYAN}ℹ️  ${BRIGHT_WHITE}$message${NC}"
     log_message "INFO: $message"
 }
 
 # Function to display a pass message
 pass() {
     local message="$1"
-    echo -e "${GREEN}[PASS] $message${NC}"
+    echo -e "${GREEN}✓ ${BRIGHT_GREEN}$message${NC}"
     log_message "PASS: $message"
 }
 
@@ -43,9 +70,9 @@ pass() {
 fail() {
     local message="$1"
     local details="${2:-}"
-    echo -e "${RED}[FAIL] $message${NC}"
+    echo -e "${RED}✗ ${BRIGHT_RED}$message${NC}"
     if [[ -n "$details" ]]; then
-        echo -e "${RED}       $details${NC}"
+        echo -e "${GRAY}  └─ ${RED}$details${NC}"
     fi
     log_message "FAIL: $message $details"
 }
@@ -53,14 +80,14 @@ fail() {
 # Function to display a warning message
 warning() {
     local message="$1"
-    echo -e "${YELLOW}[WARNING] $message${NC}"
+    echo -e "${YELLOW}⚠️  ${BRIGHT_YELLOW}$message${NC}"
     log_message "WARNING: $message"
 }
 
 # Function to display a suggestion message
 suggest() {
     local message="$1"
-    echo -e "${YELLOW}$message${NC}"
+    echo -e "${GRAY}  └─ ${CYAN}$message${NC}"
 }
 
 # Function to handle check results
@@ -82,9 +109,9 @@ report_check_result() {
 section_header() {
     local title="$1"
     echo ""
-    echo "==============================================="
-    echo "$title"
-    echo "==============================================="
+    echo -e "${BLUE}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
+    echo -e "${BLUE}┃${BRIGHT_WHITE}${BOLD} ${title} ${NC}${BLUE}┃${NC}"
+    echo -e "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
     log_message "Starting $title"
 }
 
@@ -94,17 +121,53 @@ section_footer() {
     local section_name="$2"
     
     echo ""
-    echo "==============================================="
+    if [[ $result -eq 0 ]]; then
+        echo -e "${BG_GREEN}${BLACK} COMPLETE ${NC} ${GREEN}${BOLD}$section_name completed successfully.${NC}"
+    else
+        echo -e "${BG_RED}${WHITE} FAILED ${NC} ${RED}${BOLD}$section_name failed. Please address the issues above.${NC}"
+    fi
+    echo -e "${GRAY}────────────────────────────────────────────────────────────${NC}"
     
     if [[ $result -eq 0 ]]; then
-        echo -e "${GREEN}$section_name completed successfully.${NC}"
         log_message "$section_name completed successfully."
         return 0
     else
-        echo -e "${RED}$section_name failed. Please address the issues above.${NC}"
         log_message "$section_name failed."
         return 1
     fi
+}
+
+# Function to display progress
+show_progress() {
+    local current="$1"
+    local total="$2"
+    local description="$3"
+    local percentage=$((current * 100 / total))
+    
+    echo -e "\n${BRIGHT_BLUE}[$current/$total]${NC} ${BLUE}${BOLD}$description${NC}"
+    
+    # Create a progress bar with 30 segments
+    local completed=$((percentage * 30 / 100))
+    local remaining=$((30 - completed))
+    
+    echo -ne "${BLUE}[${NC}"
+    # Print completed segments
+    for ((i=0; i<completed; i++)); do
+        echo -ne "${BRIGHT_BLUE}█${NC}"
+    done
+    # Print remaining segments
+    for ((i=0; i<remaining; i++)); do
+        echo -ne "${GRAY}▒${NC}"
+    done
+    echo -e "${BLUE}]${NC} ${BRIGHT_WHITE}${percentage}%${NC}\n"
+}
+
+# Function to display a property value in the configuration output
+show_config_property() {
+    local name="$1"
+    local value="$2"
+    
+    echo -e "${GRAY}  │ ${BRIGHT_WHITE}$name:${NC} ${CYAN}$value${NC}"
 }
 
 # Function to compare versions (handles numeric version comparisons)
