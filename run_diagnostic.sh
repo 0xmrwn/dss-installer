@@ -17,10 +17,10 @@ fi
 # Default values
 CONFIG_FILE="${SCRIPT_DIR}/config.ini"
 LOG_FILE="${SCRIPT_DIR}/diagnostics.log"
-NODE_TYPE="DESIGN"
+NODE_TYPE="DESIGN"  # Default node type for reporting only
 VERBOSE=false
-AUTO_FIX=false  # Added default auto-fix flag
-NON_INTERACTIVE=false  # Add non-interactive mode flag
+AUTO_FIX=false
+NON_INTERACTIVE=false
 
 # Check for common utilities using absolute path
 if [[ ! -f "${SCRIPT_DIR}/modules/utils/common.sh" ]]; then
@@ -40,7 +40,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -c, --config FILE    Path to configuration file (default: config.ini)"
-    echo "  -n, --node TYPE      Node type: DESIGN, AUTO (default: DESIGN)"
+    echo "  -n, --node TYPE      Node type for reporting purposes only (default: DESIGN)"
     echo "  -l, --log FILE       Path to log file (default: diagnostics.log)"
     echo "  -v, --verbose        Enable verbose output"
     echo "  --auto-fix           Attempt to automatically fix non-sensitive issues"
@@ -59,7 +59,7 @@ parse_args() {
                 shift 2
                 ;;
             -n|--node)
-                NODE_TYPE="${2^^}" # Convert to uppercase
+                NODE_TYPE=$(echo "$2" | tr '[:lower:]' '[:upper:]') # Convert to uppercase
                 shift 2
                 ;;
             -l|--log)
@@ -88,12 +88,6 @@ parse_args() {
         esac
     done
     
-    # Validate node type
-    if [[ "$NODE_TYPE" != "DESIGN" && "$NODE_TYPE" != "AUTO" ]]; then
-        echo "Error: Invalid node type. Must be DESIGN or AUTO."
-        exit 1
-    fi
-    
     # Validate config file
     if [[ ! -f "$CONFIG_FILE" ]]; then
         echo "Error: Config file not found: $CONFIG_FILE"
@@ -103,29 +97,19 @@ parse_args() {
 
 # Function to read a value from INI file
 read_ini() {
-    local section="$1"
-    local key="$2"
-    local default="${3:-}"
+    local key="$1"
+    local default="${2:-}"
     
-    # Try to get value from specified section
+    # Try to get value from NODE section
     local value
-    value=$(awk -F "=" -v section="[$section]" -v key="$key" '
+    value=$(awk -F "=" -v key="$key" '
         BEGIN { in_section = 0 }
-        /^\[/ { in_section = ($0 == section) }
+        /^\[NODE\]/ { in_section = 1 }
+        /^\[/ && !/^\[NODE\]/ { in_section = 0 }
         in_section && $1 ~ "^[ \t]*"key"[ \t]*$" { gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }
     ' "$CONFIG_FILE" | tr -d '\r')
     
-    # If not found in section, try DEFAULT section
-    if [[ -z "$value" && "$section" != "DEFAULT" ]]; then
-        value=$(awk -F "=" -v key="$key" '
-            BEGIN { in_section = 0 }
-            /^\[DEFAULT\]/ { in_section = 1 }
-            /^\[/ && !/^\[DEFAULT\]/ { in_section = 0 }
-            in_section && $1 ~ "^[ \t]*"key"[ \t]*$" { gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit }
-        ' "$CONFIG_FILE" | tr -d '\r')
-    fi
-    
-    # If still not found, use default
+    # If not found, use default
     if [[ -z "$value" ]]; then
         value="$default"
     fi
@@ -187,6 +171,19 @@ main() {
     # Parse command line arguments
     parse_args "$@"
     
+    # Override NODE_TYPE from config file if specified there
+    local config_node_type
+    config_node_type=$(read_ini "node_type")
+    if [[ -n "$config_node_type" ]]; then
+        NODE_TYPE=$(echo "$config_node_type" | tr '[:lower:]' '[:upper:]') # Convert config node type to uppercase
+    fi
+
+    # Validate node type; allowed values are DESIGN, AUTOMATION, API, GOVERN, DEPLOYER
+    case "$NODE_TYPE" in
+        DESIGN|AUTOMATION|API|GOVERN|DEPLOYER) ;; 
+        *) echo "Error: Invalid node type: $NODE_TYPE. Must be one of: DESIGN, AUTOMATION, API, GOVERN, DEPLOYER" >&2; exit 1 ;;
+    esac
+    
     # Initialize log file
     init_log
     
@@ -227,47 +224,48 @@ main() {
     local total_checks=6  # OS, hardware, filesystem, limits, network, software
     local current_check=0
     
-    # Read OS check parameters from config file
+    # Read configuration values from config.ini
+    # OS check parameters
     local allowed_os_distros
-    allowed_os_distros=$(read_ini "$NODE_TYPE" "allowed_os_distros")
     local allowed_os_versions
-    allowed_os_versions=$(read_ini "$NODE_TYPE" "allowed_os_versions")
     local min_kernel_version
-    min_kernel_version=$(read_ini "$NODE_TYPE" "min_kernel_version")
     local locale_required
-    locale_required=$(read_ini "$NODE_TYPE" "locale_required")
+    allowed_os_distros=$(read_ini "allowed_os_distros")
+    allowed_os_versions=$(read_ini "allowed_os_versions")
+    min_kernel_version=$(read_ini "min_kernel_version")
+    locale_required=$(read_ini "locale_required")
     
-    # Read hardware check parameters from config file
+    # Hardware check parameters
     local vcpus
-    vcpus=$(read_ini "$NODE_TYPE" "vcpus")
     local memory_gb
-    memory_gb=$(read_ini "$NODE_TYPE" "memory_gb")
     local min_root_disk_gb
-    min_root_disk_gb=$(read_ini "$NODE_TYPE" "min_root_disk_gb")
     local data_disk_mount
-    data_disk_mount=$(read_ini "$NODE_TYPE" "data_disk_mount")
     local min_data_disk_gb
-    min_data_disk_gb=$(read_ini "$NODE_TYPE" "min_data_disk_gb")
     local filesystem
-    filesystem=$(read_ini "$NODE_TYPE" "filesystem")
+    vcpus=$(read_ini "vcpus")
+    memory_gb=$(read_ini "memory_gb")
+    min_root_disk_gb=$(read_ini "min_root_disk_gb")
+    data_disk_mount=$(read_ini "data_disk_mount")
+    min_data_disk_gb=$(read_ini "min_data_disk_gb")
+    filesystem=$(read_ini "filesystem")
     
-    # Read system limits check parameters from config file
+    # System limits check parameters
     local ulimit_files
-    ulimit_files=$(read_ini "$NODE_TYPE" "ulimit_files")
     local ulimit_processes
-    ulimit_processes=$(read_ini "$NODE_TYPE" "ulimit_processes")
     local port_range
-    port_range=$(read_ini "$NODE_TYPE" "port_range")
+    ulimit_files=$(read_ini "ulimit_files")
+    ulimit_processes=$(read_ini "ulimit_processes")
+    port_range=$(read_ini "port_range")
     
-    # Read software check parameters from config file
+    # Software check parameters
     local java_versions
-    java_versions=$(read_ini "$NODE_TYPE" "java_versions")
     local python_versions
-    python_versions=$(read_ini "$NODE_TYPE" "python_versions")
     local required_packages
-    required_packages=$(read_ini "$NODE_TYPE" "required_packages")
     local required_repos
-    required_repos=$(read_ini "$NODE_TYPE" "required_repos")
+    java_versions=$(read_ini "java_versions")
+    python_versions=$(read_ini "python_versions")
+    required_packages=$(read_ini "required_packages")
+    required_repos=$(read_ini "required_repos")
     
     # Print diagnostic parameters if verbose
     if [[ "$VERBOSE" == true ]]; then
